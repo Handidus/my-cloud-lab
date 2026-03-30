@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud PaaS Lab</title>
-    <!-- Подключаем стили Tailwind напрямую из облака (CDN) -->
+    <title>Cloud PaaS Lab - Interactive</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes gradient {
@@ -17,53 +16,101 @@
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
         }
+        /* Плавный переход для смены темы */
+        body { transition: background-color 0.3s, color 0.3s; }
     </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center font-sans p-4">
+<body id="mainBody" class="bg-slate-900 text-white min-h-screen flex items-center justify-center font-sans p-4">
 
-    <div class="max-w-2xl w-full bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700">
-        <!-- Шапка с градиентом -->
+    <div id="card" class="max-w-2xl w-full bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700 transition-colors">
+        <!-- Шапка -->
         <div class="animate-gradient h-32 flex items-center justify-center">
             <h1 class="text-3xl font-black uppercase tracking-widest drop-shadow-md">Cloud Project</h1>
         </div>
 
         <div class="p-8 text-center">
-            <h2 class="text-2xl font-bold mb-4 text-blue-400">Лабораторная работа: Технологии PaaS</h2>
-            <p class="text-slate-400 mb-8 leading-relaxed">
-                Данная страница развернута в глобальной сети с использованием модели <b>Platform as a Service</b>. 
-                Все ресурсы (сервер, сеть, домен) предоставлены облачным провайдером автоматически.
+            <h2 id="titleText" class="text-2xl font-bold mb-4 text-blue-400">Лабораторная работа: Технологии PaaS</h2>
+            <p id="descText" class="text-slate-400 mb-8 leading-relaxed">
+                Данная страница развернута в облаке. Используйте кнопки ниже для взаимодействия с DOM-элементами в реальном времени.
             </p>
 
-            <!-- Интерактивные кнопки -->
+            <!-- Блок интерактивных кнопок -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                <button onclick="alert('Сайт успешно работает в облаке!')" 
-                        class="bg-blue-600 hover:bg-blue-500 transition-all py-3 px-6 rounded-xl font-bold shadow-lg shadow-blue-900/20 active:scale-95">
-                    Проверить статус
+                <!-- 1. Смена темы -->
+                <button onclick="toggleTheme()" 
+                        class="bg-indigo-600 hover:bg-indigo-500 transition-all py-3 px-6 rounded-xl font-bold active:scale-95 shadow-lg">
+                    🌓 Сменить тему
                 </button>
                 
-                <button onclick="location.reload()" 
-                        class="bg-slate-700 hover:bg-slate-600 transition-all py-3 px-6 rounded-xl font-bold border border-slate-500 active:scale-95">
-                    Обновить данные
+                <!-- 2. Случайный цвет заголовка -->
+                <button onclick="changeAccentColor()" 
+                        class="bg-emerald-600 hover:bg-emerald-500 transition-all py-3 px-6 rounded-xl font-bold active:scale-95 shadow-lg">
+                    🎨 Цвет акцента
                 </button>
+
+                <!-- 3. Генерация ID -->
+                <button onclick="generateSession()" 
+                        class="bg-slate-700 hover:bg-slate-600 transition-all py-3 px-6 rounded-xl font-bold border border-slate-500 active:scale-95">
+                    🆔 Создать ID сессии
+                </button>
+
+                <!-- 4. Сброс -->
+                <button onclick="location.reload()" 
+                        class="bg-rose-600 hover:bg-rose-500 transition-all py-3 px-6 rounded-xl font-bold active:scale-95 shadow-lg">
+                    🔄 Сбросить всё
+                </button>
+            </div>
+
+            <!-- Информационная панель -->
+            <div id="sessionDisplay" class="hidden mb-6 p-3 bg-slate-900/50 rounded-lg border border-slate-700 text-xs font-mono text-emerald-400">
+                Session ID: <span id="sessionId">---</span>
             </div>
 
             <!-- Технические индикаторы -->
             <div class="flex items-center justify-center space-x-6 text-sm text-slate-500 border-t border-slate-700 pt-6">
-                <div class="flex items-center">
-                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-                    Online
-                </div>
-                <div class="flex items-center">
-                    <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                    HTTPS Secured
-                </div>
-                <div class="flex items-center">
-                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                    Auto-Deploy
-                </div>
+                <div class="flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>Online</div>
+                <div class="flex items-center"><span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>PaaS Active</div>
             </div>
         </div>
     </div>
 
+    <script>
+        // Функция смены темы (Тёмная / Светлая)
+        function toggleTheme() {
+            const body = document.getElementById('mainBody');
+            const card = document.getElementById('card');
+            const desc = document.getElementById('descText');
+            
+            if (body.classList.contains('bg-slate-900')) {
+                // Переключаем на светлую
+                body.classList.replace('bg-slate-900', 'bg-slate-100');
+                body.classList.replace('text-white', 'text-slate-900');
+                card.classList.replace('bg-slate-800', 'bg-white');
+                card.classList.replace('border-slate-700', 'border-slate-200');
+                desc.classList.replace('text-slate-400', 'text-slate-600');
+            } else {
+                // Возвращаем тёмную
+                body.classList.replace('bg-slate-100', 'bg-slate-900');
+                body.classList.replace('text-slate-900', 'text-white');
+                card.classList.replace('bg-white', 'bg-slate-800');
+                card.classList.replace('border-slate-200', 'border-slate-700');
+                desc.classList.replace('text-slate-600', 'text-slate-400');
+            }
+        }
+
+        // Функция случайного цвета для заголовка
+        function changeAccentColor() {
+            const colors = ['#60a5fa', '#f87171', '#fbbf24', '#34d399', '#a78bfa', '#f472b6'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            document.getElementById('titleText').style.color = randomColor;
+        }
+
+        // Функция генерации "ID сессии" (имитация работы бэкенда)
+        function generateSession() {
+            const id = 'SESSION-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+            document.getElementById('sessionId').innerText = id;
+            document.getElementById('sessionDisplay').classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>
