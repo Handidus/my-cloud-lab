@@ -16,34 +16,41 @@
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
         }
+        body { transition: background-color 0.3s, color 0.3s; }
+        .card-transition { transition: background-color 0.3s, border-color 0.3s; }
     </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center font-sans p-4">
+<body id="mainBody" class="bg-slate-900 text-white min-h-screen flex items-center justify-center font-sans p-4">
 
-    <div class="max-w-md w-full bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700">
+    <div id="card" class="max-w-md w-full bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700 card-transition">
         <!-- Шапка -->
-        <div class="animate-gradient h-24 flex items-center justify-center">
-            <h1 class="text-2xl font-black uppercase tracking-wider">Secure Pass</h1>
+        <div class="animate-gradient h-24 flex items-center justify-center relative">
+            <h1 class="text-2xl font-black uppercase tracking-wider drop-shadow-md">Secure Pass</h1>
+            <!-- Кнопка смены темы в углу шапки -->
+            <button onclick="toggleTheme()" class="absolute right-4 top-4 bg-white/20 hover:bg-white/30 p-2 rounded-full backdrop-blur-sm transition-all">
+                <span id="themeIcon">🌙</span>
+            </button>
         </div>
 
         <div class="p-8 text-center">
-            <h2 class="text-xl font-bold mb-2 text-blue-400">Генератор паролей</h2>
-            <p class="text-slate-400 mb-8 text-sm">Создание надежного 8-символьного ключа прямо в браузере.</p>
+            <!-- Динамический заголовок -->
+            <h2 id="dynamicTitle" class="text-xl font-bold mb-2 text-blue-400">Генератор паролей</h2>
+            <p id="descText" class="text-slate-400 mb-8 text-sm">Создание надежного 8-символьного ключа.</p>
 
             <!-- Поле вывода пароля -->
-            <div class="mb-6 p-4 bg-slate-900 rounded-2xl border border-slate-700 min-h-[60px] flex items-center justify-center">
+            <div id="outputBox" class="mb-6 p-4 bg-slate-900 rounded-2xl border border-slate-700 min-h-[60px] flex items-center justify-center">
                 <span id="passwordOutput" class="text-2xl font-mono tracking-widest text-emerald-400">— — — — — — — —</span>
             </div>
 
             <!-- Кнопки управления -->
             <div class="flex flex-col gap-3">
                 <button onclick="generatePassword()" 
-                        class="w-full bg-blue-600 hover:bg-blue-500 transition-all py-4 px-6 rounded-xl font-bold shadow-lg active:scale-95 text-lg">
+                        class="w-full bg-blue-600 hover:bg-blue-500 text-white transition-all py-4 px-6 rounded-xl font-bold shadow-lg active:scale-95 text-lg">
                     Сгенерировать
                 </button>
                 
                 <button onclick="copyToClipboard()" 
-                        class="w-full bg-slate-700 hover:bg-slate-600 transition-all py-3 px-6 rounded-xl font-semibold border border-slate-600 active:scale-95 text-sm">
+                        class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all py-3 px-6 rounded-xl font-semibold border border-slate-600 active:scale-95 text-sm">
                     Копировать в буфер
                 </button>
             </div>
@@ -56,26 +63,70 @@
     </div>
 
     <script>
+        // Тексты для динамического заголовка
+        const titles = [
+            "Ваш новый пароль",
+            "Безопасность прежде всего",
+            "Ключ создан!",
+            "Надежная защита",
+            "Готово к использованию"
+        ];
+
         function generatePassword() {
             const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
             let password = "";
             
-            // Честный цикл на 8 итераций
             for (let i = 0; i < 8; i++) {
                 const randomIndex = Math.floor(Math.random() * charset.length);
                 password += charset[randomIndex];
             }
             
-            // Вывод результата
+            // 1. Вывод пароля
             const output = document.getElementById('passwordOutput');
             output.innerText = password;
+            
+            // 2. Изменение текста заголовка на случайный
+            const randomTitle = titles[Math.floor(Math.random() * titles.length)];
+            document.getElementById('dynamicTitle').innerText = randomTitle;
+            
+            // Анимация
             output.classList.add('animate-pulse');
             setTimeout(() => output.classList.remove('animate-pulse'), 500);
         }
 
+        function toggleTheme() {
+            const body = document.getElementById('mainBody');
+            const card = document.getElementById('card');
+            const outputBox = document.getElementById('outputBox');
+            const desc = document.getElementById('descText');
+            const icon = document.getElementById('themeIcon');
+
+            if (body.classList.contains('bg-slate-900')) {
+                // Светлая тема
+                body.classList.replace('bg-slate-900', 'bg-slate-50');
+                body.classList.replace('text-white', 'text-slate-900');
+                card.classList.replace('bg-slate-800', 'bg-white');
+                card.classList.replace('border-slate-700', 'border-slate-200');
+                outputBox.classList.replace('bg-slate-900', 'bg-slate-100');
+                outputBox.classList.replace('border-slate-700', 'border-slate-300');
+                desc.classList.replace('text-slate-400', 'text-slate-500');
+                icon.innerText = "☀️";
+            } else {
+                // Темная тема
+                body.classList.replace('bg-slate-50', 'bg-slate-900');
+                body.classList.replace('text-slate-900', 'text-white');
+                card.classList.replace('bg-white', 'bg-slate-800');
+                card.classList.replace('border-slate-200', 'border-slate-700');
+                outputBox.classList.replace('bg-slate-100', 'bg-slate-900');
+                outputBox.classList.replace('border-slate-300', 'border-slate-700');
+                desc.classList.replace('text-slate-500', 'text-slate-400');
+                icon.innerText = "🌙";
+            }
+        }
+
         function copyToClipboard() {
             const pass = document.getElementById('passwordOutput').innerText;
-            if (pass.includes('—')) return; // Если пароль еще не создан
+            if (pass.includes('—')) return;
 
             navigator.clipboard.writeText(pass).then(() => {
                 const msg = document.getElementById('statusMessage');
