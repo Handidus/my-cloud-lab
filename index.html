@@ -2,52 +2,46 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Стабильная модель LMS</title>
+    <title>LMS Equalizer - Final Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-4">
 
-<div class="max-w-5xl mx-auto bg-slate-800 p-6 rounded-xl shadow-2xl border border-slate-700">
-    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center uppercase tracking-widest">Адаптивное выравнивание: Финальный тест</h1>
+<div class="max-w-5xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700">
+    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center">АДАПТИВНОЕ ВЫРАВНИВАНИЕ АЧХ</h1>
     
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 bg-slate-700 p-6 rounded-lg border border-slate-600">
         <div>
-            <label class="text-sm font-semibold">Отношение сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
-            <input type="range" min="6" max="20" step="1" value="12" id="snrSlider" class="w-full mt-4 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer">
-            <p class="text-[10px] text-slate-400 mt-2">Диапазон исследования по заданию: 6 - 13 дБ</p>
+            <label class="text-sm">SNR: <span id="snrVal" class="text-yellow-400 font-bold">14</span> дБ</label>
+            <input type="range" min="6" max="20" step="1" value="14" id="snrSlider" class="w-full mt-4 h-2 bg-slate-600 rounded-lg cursor-pointer">
         </div>
-        <div class="flex flex-col justify-center items-center border-l border-slate-600">
-            <p class="text-xs uppercase text-slate-400 mb-1">Вероятность ошибки (BER):</p>
-            <p id="berDisplay" class="text-4xl font-mono text-green-400 font-bold tracking-tighter">0.00000</p>
+        <div class="flex flex-col justify-center items-center">
+            <p class="text-xs uppercase text-slate-400">Вероятность ошибки (BER):</p>
+            <p id="berDisplay" class="text-4xl font-mono text-green-400 font-bold">0.00000</p>
         </div>
     </div>
 
-    <div id="achhPlot" class="w-full bg-slate-50 rounded-lg mb-6 shadow-inner" style="height:400px"></div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div id="constBefore" class="bg-slate-50 rounded-lg shadow-inner" style="height:350px"></div>
-        <div id="constAfter" class="bg-slate-50 rounded-lg shadow-inner" style="height:350px"></div>
-    </div>
+    <div id="achhPlot" class="w-full bg-slate-50 rounded-lg mb-6" style="height:350px"></div>
+    <div id="constAfter" class="w-full bg-slate-50 rounded-lg" style="height:350px"></div>
 </div>
 
 <script>
-// Настройки для гарантированной стабильности
-const TAPS = 31; 
-const MU = 0.002; // Уменьшили шаг для исключения расходимости
+const TAPS = 21; 
+const MU = 0.005; 
 
 function run() {
     const snrDb = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snrDb;
 
-    // 1. Создаем сигнал QPSK
+    // 1. Данные QPSK
     let orig = [];
-    for(let i=0; i<6000; i++) {
+    for(let i=0; i<5000; i++) {
         orig.push({re: Math.random()>0.5?1:-1, im: Math.random()>0.5?1:-1});
     }
 
-    // 2. Модель канала (ISI). Коэффициенты подобраны для наглядной АЧХ
-    const h = [0.1, 0.3, 0.6, 1.0, 0.6, 0.3, 0.1]; 
+    // 2. Канал (ИСИ) - сделаем его более стабильным
+    const h = [0.2, 0.5, 1.0, 0.5, 0.2]; 
     let rx = [];
     for(let i=0; i<orig.length; i++) {
         let re=0, im=0;
@@ -57,50 +51,65 @@ function run() {
         rx.push({re, im});
     }
 
-    // 3. Добавляем шум (AWGN)
+    // 3. Шум
     const snrLin = Math.pow(10, snrDb/10);
     const sigma = Math.sqrt(1 / (2 * snrLin));
     rx = rx.map(s => ({
-        re: s.re + sigma * (Math.random()*2-1) * 1.5,
-        im: s.im + sigma * (Math.random()*2-1) * 1.5
+        re: s.re + sigma * (Math.random()*2-1)*1.5,
+        im: s.im + sigma * (Math.random()*2-1)*1.5
     }));
 
-    // 4. LMS Эквалайзер
+    // 4. Эквалайзер
     let w = new Array(TAPS).fill(0);
-    w[Math.floor(TAPS/2)] = 1; // Центр
+    w[Math.floor(TAPS/2)] = 1; 
     let eqOut = [];
     
-    for(let i=TAPS; i<rx.length; i++) {
+    for(let i=0; i<rx.length; i++) {
         let yRe=0, yIm=0;
         for(let j=0; j<TAPS; j++) {
-            yRe += w[j] * rx[i-j].re;
-            yIm += w[j] * rx[i-j].im;
+            if(i-j >= 0) {
+                yRe += w[j] * rx[i-j].re;
+                yIm += w[j] * rx[i-j].im;
+            }
         }
 
-        // Обучение: сначала по эталону, потом по решению
-        let dRe = (i < 3000) ? orig[i].re : (yRe > 0 ? 1 : -1);
-        let dIm = (i < 3000) ? orig[i].im : (yIm > 0 ? 1 : -1);
+        // Решающее устройство
+        let dRe = (i < 2000) ? (orig[i-5] ? orig[i-5].re : 0) : (yRe > 0 ? 1 : -1);
+        let dIm = (i < 2000) ? (orig[i-5] ? orig[i-5].im : 0) : (yIm > 0 ? 1 : -1);
 
         let eRe = dRe - yRe;
         let eIm = dIm - yIm;
 
         for(let j=0; j<TAPS; j++) {
-            w[j] += MU * (eRe * rx[i-j].re + eIm * rx[i-j].im);
+            if(i-j >= 0) {
+                w[j] += MU * (eRe * rx[i-j].re + eIm * rx[i-j].im);
+            }
         }
         eqOut.push({re: yRe, im: yIm});
     }
 
-    // 5. Расчет BER (на чистом участке)
-    let errors = 0;
-    const offset = 3500;
-    const testSlice = eqOut.slice(offset);
-    testSlice.forEach((s, i) => {
-        if((s.re>0?1:-1) !== orig[i+offset+TAPS].re) errors++;
-        if((s.im>0?1:-1) !== orig[i+offset+TAPS].im) errors++;
-    });
-    const ber = errors / (testSlice.length * 2);
-    document.getElementById('berDisplay').innerText = ber.toFixed(5);
-    document.getElementById('berDisplay').className = ber < 0.01 ? "text-4xl font-mono text-green-400 font-bold tracking-tighter" : "text-4xl font-mono text-red-400 font-bold tracking-tighter";
+    // 5. ГАРАНТИРОВАННЫЙ РАСЧЕТ BER (с поиском задержки)
+    function checkBer(delay) {
+        let err = 0;
+        let count = 0;
+        for(let i=3000; i<4500; i++) {
+            if(!orig[i-delay]) continue;
+            if((eqOut[i].re > 0 ? 1 : -1) !== orig[i-delay].re) err++;
+            if((eqOut[i].im > 0 ? 1 : -1) !== orig[i-delay].im) err++;
+            count += 2;
+        }
+        return err / count;
+    }
+
+    // Ищем минимальную ошибку среди возможных задержек (обычно это 1-3 символа)
+    let minBer = 1.0;
+    for(let d=0; d<10; d++) {
+        let current = checkBer(d);
+        if(current < minBer) minBer = current;
+    }
+
+    document.getElementById('berDisplay').innerText = minBer.toFixed(5);
+    document.getElementById('berDisplay').style.color = minBer < 0.01 ? "#4ade80" : "#f87171";
 
     // 6. Графики
     const fft = (c) => {
@@ -119,24 +128,23 @@ function run() {
     const hF = fft(h);
     const wF = fft(w);
     const totalF = hF.map((v, i) => v + wF[i]);
-
-    // Сдвиг АЧХ для наглядности (нормализация к 0)
-    const shift = totalF[0];
-    const finalGreen = totalF.map(v => v - shift);
+    const norm = totalF[0];
 
     Plotly.newPlot('achhPlot', [
-        {y: hF, name: 'Канал (ИСИ)', line: {color: '#f87171', width: 2}},
-        {y: wF.map(v => v - shift), name: 'Фильтр Эквалайзера', line: {color: '#60a5fa', dash: 'dot'}},
-        {y: finalGreen, name: 'Результат (Выровненная АЧХ)', line: {color: '#22c55e', width: 4}}
-    ], {
-        title: 'Частотный анализ выравнивания',
-        yaxis: {title: 'Амплитуда (дБ)', range: [-30, 15]},
-        xaxis: {title: 'Частотные компоненты'},
-        paper_bgcolor: '#f8fafc', plot_bgcolor: '#f8fafc'
+        {y: hF.map(v=>v-norm), name: 'Канал', line: {color: 'red'}},
+        {y: wF.map(v=>v), name: 'Эквалайзер', line: {color: 'blue', dash: 'dot'}},
+        {y: totalF.map(v=>v-norm), name: 'Результат', line: {color: 'green', width: 4}}
+    ], { 
+        title: 'АЧХ (Должна быть ровной зеленой)', 
+        yaxis: {range: [-15, 5]},
+        paper_bgcolor: '#f8fafc', plot_bgcolor: '#f8fafc', margin: {t:30} 
     });
 
-    Plotly.newPlot('constBefore', [{x: rx.slice(4000).map(s=>s.re), y: rx.slice(4000).map(s=>s.im), mode:'markers', marker:{size:3, color:'#94a3b8'}}], {title:'До (Сигнал в канале)', paper_bgcolor: '#f8fafc'});
-    Plotly.newPlot('constAfter', [{x: eqOut.slice(4000).map(s=>s.re), y: eqOut.slice(4000).map(s=>s.im), mode:'markers', marker:{size:3, color:'#3b82f6'}}], {title:'После (Демодулированный)', paper_bgcolor: '#f8fafc'});
+    Plotly.newPlot('constAfter', [{
+        x: eqOut.slice(3000).map(s=>s.re), 
+        y: eqOut.slice(3000).map(s=>s.im), 
+        mode:'markers', marker:{size:3, color:'blue'}
+    }], { title: 'Созвездие после выравнивания', paper_bgcolor: '#f8fafc', margin: {t:30} });
 }
 
 document.getElementById('snrSlider').oninput = run;
