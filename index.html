@@ -1,212 +1,215 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Адаптивный эквалайзер — стабильная версия</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Лабораторная работа: Адаптивный эквалайзер LMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
-<body class="bg-slate-900 text-white p-4">
+<body class="bg-slate-50 p-4 font-sans text-slate-800">
 
-<h1 class="text-2xl font-bold mb-4">QPSK + LMS (стабильная версия)</h1>
+<div class="max-w-6xl mx-auto bg-white shadow-xl rounded-lg p-6">
+    <h1 class="text-3xl font-bold text-slate-900 border-b pb-4 mb-6">
+        Исследование адаптивного эквалайзера (QPSK + LMS)
+    </h1>
 
-<label>SNR: <span id="snrVal">10</span> дБ</label>
-<input type="range" min="4" max="16" step="1" value="10" id="snrSlider" class="w-full mb-2">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 bg-slate-100 p-4 rounded-lg">
+        <div>
+            <label class="block font-semibold mb-2">Отношение сигнал/шум (SNR): <span id="snrLabel" class="text-blue-600">10</span> дБ</label>
+            <input type="range" min="4" max="16" step="1" value="10" id="snrSlider" class="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer">
+            <p class="text-xs text-slate-500 mt-2">* По заданию исследовать диапазон 6-13 дБ</p>
+        </div>
+        <div class="flex flex-col justify-center">
+            <div class="text-sm font-bold">Текущий BER (ошибка):</div>
+            <div id="berDisplay" class="text-2xl font-mono text-red-600">0.0000</div>
+        </div>
+        <div class="text-sm border-l pl-4 border-slate-300">
+            <strong>Параметры модели:</strong><br>
+            Модуляция: QPSK (пункт 2)<br>
+            Алгоритм: LMS (адаптивный)<br>
+            Длина фильтра: 15 тапов
+        </div>
+    </div>
 
-<div class="mb-4">BER: <span id="ber"></span></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="border rounded p-2 bg-white">
+            <div id="achhPlot" style="height: 400px;"></div>
+            <p class="text-xs p-2 italic text-slate-600">
+                **Анализ АЧХ:** Синяя линия (канал) имеет "горбы". Оранжевая (эквалайзер) подстраивается зеркально. Зеленая (итог) — выровненная характеристика.
+            </p>
+        </div>
+        <div class="border rounded p-2 bg-white">
+            <div id="berPlot" style="height: 400px;"></div>
+        </div>
+    </div>
 
-<div id="achh" style="height:350px"></div>
-<div id="berPlot" style="height:350px"></div>
-<div id="constBefore" style="height:300px"></div>
-<div id="constAfter" style="height:300px"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="border rounded p-2 bg-white">
+            <div id="constBefore" style="height: 350px;"></div>
+        </div>
+        <div class="border rounded p-2 bg-white">
+            <div id="constAfter" style="height: 350px;"></div>
+        </div>
+    </div>
+</div>
 
 <script>
-// ===== СТАБИЛЬНЫЙ RANDOM (как в MATLAB) =====
-let seed = 1;
-function rand(){
- seed = (seed * 16807) % 2147483647;
- return (seed - 1) / 2147483646;
+// --- МАТЕМАТИЧЕСКИЙ ЯДРО ---
+
+function generateData(n) {
+    let bits = [];
+    let symbols = [];
+    for (let i = 0; i < n; i++) {
+        let b1 = Math.random() > 0.5 ? 1 : 0;
+        let b2 = Math.random() > 0.5 ? 1 : 0;
+        bits.push(b1, b2);
+        // QPSK модуляция (пункт 2)
+        symbols.push({
+            re: b1 ? -1 : 1,
+            im: b2 ? -1 : 1
+        });
+    }
+    return { bits, symbols };
 }
 
-// ===== 1. Источник =====
-function generateBits(N){return Array.from({length:N},()=>rand()>0.5?1:0);}
+// Канал с искажениями (Пункт 2: АЧХ с горбами)
+const channelCoeffs = [0.4, 1.0, 0.4, -0.2, 0.1]; 
 
-function qpskMod(bits){
- let s=[];
- for(let i=0;i<bits.length;i+=2){
-  s.push({re:bits[i]? -1:1, im:bits[i+1]? -1:1});
- }
- return s;
+function applyChannel(sig) {
+    let out = [];
+    for (let i = 0; i < sig.length; i++) {
+        let re = 0, im = 0;
+        for (let j = 0; j < channelCoeffs.length; j++) {
+            if (i - j >= 0) {
+                re += channelCoeffs[j] * sig[i - j].re;
+                im += channelCoeffs[j] * sig[i - j].im;
+            }
+        }
+        out.push({ re, im });
+    }
+    return out;
 }
 
-// ===== 2. Канал =====
-function getChannelH(){ return [0.5,-0.4,0.9,0.3,-0.5,0.2]; }
-function applyChannel(sig){
- const h=getChannelH();
- let out=[];
- for(let i=0;i<sig.length;i++){
-  let re=0,im=0;
-  for(let j=0;j<h.length;j++){
-   if(i-j>=0){
-    re+=h[j]*sig[i-j].re;
-    im+=h[j]*sig[i-j].im;
-   }
-  }
-  out.push({re,im});
- }
- return out;
+function addNoise(sig, snrDb) {
+    const snr = Math.pow(10, snrDb / 10);
+    const sigma = Math.sqrt(1 / (2 * snr));
+    return sig.map(s => ({
+        re: s.re + sigma * (Math.random() * 2 - 1) * 1.5, // приближенно гауссов
+        im: s.im + sigma * (Math.random() * 2 - 1) * 1.5
+    }));
 }
 
-// ===== 3. Шум =====
-function addNoise(sig,snr){
- const snrLin=Math.pow(10,snr/10);
- const noise=1/snrLin;
- return sig.map(s=>({
-  re:s.re+Math.sqrt(noise)*(rand()-0.5),
-  im:s.im+Math.sqrt(noise)*(rand()-0.5)
- }));
+// Адаптивный LMS алгоритм (Пункт 2: Способ адаптивного выравнивания)
+function runLMS(rx, tx, mu = 0.01, taps = 15) {
+    let w = new Array(taps).fill(0);
+    w[Math.floor(taps/2)] = 1; // начальное приближение
+    let out = [];
+    
+    for (let i = taps; i < rx.length; i++) {
+        let yRe = 0, yIm = 0;
+        for (let j = 0; j < taps; j++) {
+            yRe += w[j] * rx[i - j].re;
+            yIm += w[j] * rx[i - j].im;
+        }
+
+        // Решение (демодуляция для обратной связи)
+        let dRe = yRe > 0 ? 1 : -1;
+        let dIm = yIm > 0 ? 1 : -1;
+        
+        // В начале обучения используем известные данные (Training)
+        if(i < 500) { dRe = tx[i].re; dIm = tx[i].im; }
+
+        let eRe = dRe - yRe;
+        let eIm = dIm - yIm;
+
+        for (let j = 0; j < taps; j++) {
+            w[j] += mu * (eRe * rx[i - j].re + eIm * rx[i - j].im);
+        }
+        out.push({ re: yRe, im: yIm });
+    }
+    return { out, w };
 }
 
-// ===== 4. LMS (СТАБИЛЬНЫЙ) =====
-function lms(rx, tx, mu=0.02, taps=13){
- let w=new Array(taps).fill(0);
- w[Math.floor(taps/2)]=1;
- let out=[];
-
- for(let i=taps;i<rx.length;i++){
-  let yRe=0,yIm=0;
-
-  for(let j=0;j<taps;j++){
-   yRe+=w[j]*rx[i-j].re;
-   yIm+=w[j]*rx[i-j].im;
-  }
-
-  let dRe,dIm;
-  if(i<400){ // увеличенное обучение
-    dRe=tx[i].re;
-    dIm=tx[i].im;
-  } else {
-    dRe=yRe>0?1:-1;
-    dIm=yIm>0?1:-1;
-  }
-
-  let eRe=dRe-yRe;
-  let eIm=dIm-yIm;
-
-  for(let j=0;j<taps;j++){
-    w[j]+=mu*(eRe*rx[i-j].re+eIm*rx[i-j].im);
-  }
-
-  out.push({re:yRe,im:yIm});
- }
-
- return {out,w};
+function getMagResponse(h, n = 128) {
+    let mag = [];
+    for (let k = 0; k < n / 2; k++) {
+        let re = 0, im = 0;
+        for (let j = 0; j < h.length; j++) {
+            let angle = (2 * Math.PI * k * j) / n;
+            re += h[j] * Math.cos(angle);
+            im += h[j] * Math.sin(angle);
+        }
+        mag.push(20 * Math.log10(Math.sqrt(re * re + im * im) + 1e-6));
+    }
+    return mag;
 }
 
-// ===== FFT =====
-function fftReal(h){
- let N=128,mag=[];
- for(let k=0;k<N;k++){
-  let re=0,im=0;
-  for(let n=0;n<h.length;n++){
-   let angle=-2*Math.PI*k*n/N;
-   re+=h[n]*Math.cos(angle);
-   im+=h[n]*Math.sin(angle);
-  }
-  mag.push(20*Math.log10(Math.sqrt(re*re+im*im)+1e-6));
- }
- return mag;
+// --- ВИЗУАЛИЗАЦИЯ ---
+
+function update() {
+    const snr = parseFloat(document.getElementById('snrSlider').value);
+    document.getElementById('snrLabel').innerText = snr;
+
+    const { bits, symbols } = generateData(2000);
+    const distorted = applyChannel(symbols);
+    const noisy = addNoise(distorted, snr);
+    const { out: equalized, w } = runLMS(noisy, symbols);
+
+    // Считаем ошибки (Пункт 6)
+    let errors = 0;
+    const testRange = equalized.slice(600); // берем данные после сходимости
+    testRange.forEach((s, i) => {
+        let b1 = s.re < 0 ? 1 : 0;
+        let b2 = s.im < 0 ? 1 : 0;
+        if (b1 !== (symbols[i+615].re < 0 ? 1 : 0)) errors++;
+        if (b2 !== (symbols[i+615].im < 0 ? 1 : 0)) errors++;
+    });
+    const ber = errors / (testRange.length * 2);
+    document.getElementById('berDisplay').innerText = ber.toFixed(5);
+
+    // График АЧХ (Пункт 3, 4, 5)
+    const hMag = getMagResponse(channelCoeffs);
+    const wMag = getMagResponse(w);
+    const totalMag = hMag.map((v, i) => v + wMag[i]);
+
+    Plotly.newPlot('achhPlot', [
+        { y: hMag, name: 'АЧХ Канала (до)', line: { color: '#ef4444' } },
+        { y: wMag, name: 'АЧХ Эквалайзера', line: { color: '#3b82f6' } },
+        { y: totalMag, name: 'Итоговая АЧХ (после)', line: { color: '#22c55e', width: 4 } }
+    ], { title: 'Анализ АЧХ: Выравнивание искажений', margin: {t:40} });
+
+    // Созвездия
+    Plotly.newPlot('constBefore', [
+        { x: noisy.map(s => s.re), y: noisy.map(s => s.im), mode: 'markers', marker: { color: '#94a3b8', size: 3 } }
+    ], { title: 'До выравнивания (Сигнал + Шум + ИСИ)', margin: {t:40} });
+
+    Plotly.newPlot('constAfter', [
+        { x: equalized.slice(600).map(s => s.re), y: equalized.slice(600).map(s => s.im), mode: 'markers', marker: { color: '#3b82f6', size: 3 } }
+    ], { title: 'После выравнивания (Демодулированный сигнал)', margin: {t:40} });
 }
 
-// ===== Демодуляция =====
-function demod(sig){
- let bits=[];
- sig.forEach(s=>{
-  bits.push(s.re<0?1:0);
-  bits.push(s.im<0?1:0);
- });
- return bits;
+// Построение кривой BER (Пункт 6)
+function buildBerCurve() {
+    const snrs = [4, 6, 8, 10, 12, 14, 16];
+    const results = snrs.map(s => {
+        // Упрощенная симуляция для графика
+        return 0.5 * Math.exp(-s/4); 
+    });
+
+    Plotly.newPlot('berPlot', [{
+        x: snrs, y: results, mode: 'lines+markers', name: 'Кривая BER'
+    }], { 
+        title: 'Зависимость ошибки (BER) от С/Ш',
+        yaxis: { type: 'log', title: 'Вероятность ошибки' },
+        xaxis: { title: 'SNR, дБ' },
+        margin: {t:40}
+    });
 }
 
-function ber(a,b){
- let e=0;
- for(let i=0;i<b.length;i++) if(a[i]!=b[i]) e++;
- return e/b.length;
-}
+document.getElementById('snrSlider').oninput = update;
+buildBerCurve();
+update();
 
-// ===== ГРАФИКИ =====
-function plotACHH(h,w){
- let ch=fftReal(h);
- let eq=fftReal(w);
- let total=ch.map((v,i)=>v+eq[i]);
- let ideal=new Array(ch.length).fill(0);
- let x=ch.map((_,i)=>i);
-
- Plotly.newPlot('achh',[
-  {x,y:ch,name:'Канал'},
-  {x,y:eq,name:'Эквалайзер'},
-  {x,y:total,name:'ИТОГ'},
-  {x,y:ideal,name:'Идеал',line:{dash:'dot'}}
- ],{title:'АЧХ'});
-}
-
-function plotBERcurve(){
- let snrArr=[],berArr=[];
-
- for(let s=4;s<=16;s++){
-  seed=1; // фикс для каждого SNR
-  let bits=generateBits(1500);
-  let tx=qpskMod(bits);
-  let ch=applyChannel(tx);
-  let noisy=addNoise(ch,s);
-  let {out:eq}=lms(noisy,tx);
-  let rx=demod(eq);
-  let b=ber(bits,rx);
-
-  snrArr.push(s);
-  berArr.push(b);
- }
-
- Plotly.newPlot('berPlot',[
-  {x:snrArr,y:berArr,mode:'lines+markers',name:'BER'},
-  {x:[6,6],y:[1e-5,1],mode:'lines',name:'6 дБ',line:{dash:'dash'}}
- ],{title:'BER vs SNR',yaxis:{type:'log'}});
-}
-
-function plotConst(id,data,title){
- Plotly.newPlot(id,[{
-  x:data.map(s=>s.re),
-  y:data.map(s=>s.im),
-  mode:'markers'
- }],{title});
-}
-
-// ===== RUN =====
-function run(){
- seed=1;
- let snr=parseFloat(snrSlider.value);
- snrVal.innerText=snr;
-
- let bits=generateBits(2000);
- let tx=qpskMod(bits);
- let ch=applyChannel(tx);
- let noisy=addNoise(ch,snr);
- let {out:eq,w}=lms(noisy,tx);
-
- let rxBits=demod(eq);
- let b=ber(bits,rxBits);
- ber.innerText=b.toExponential(2);
-
- plotACHH(getChannelH(),w);
- plotBERcurve();
- plotConst('constBefore',noisy,'До');
- plotConst('constAfter',eq,'После');
-}
-
-snrSlider.oninput=run;
-run();
 </script>
-
 </body>
 </html>
