@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Адаптивный эквалайзер — финал</title>
+<title>Адаптивный эквалайзер — стабильная версия</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-4">
 
-<h1 class="text-2xl font-bold mb-4">QPSK + LMS эквалайзер (версия под защиту)</h1>
+<h1 class="text-2xl font-bold mb-4">QPSK + LMS (стабильная версия)</h1>
 
 <label>SNR: <span id="snrVal">10</span> дБ</label>
 <input type="range" min="4" max="16" step="1" value="10" id="snrSlider" class="w-full mb-2">
@@ -22,8 +22,16 @@
 <div id="constAfter" style="height:300px"></div>
 
 <script>
-// ===== 1. Источник и QPSK =====
-function generateBits(N){return Array.from({length:N},()=>Math.random()>0.5?1:0);}
+// ===== СТАБИЛЬНЫЙ RANDOM (как в MATLAB) =====
+let seed = 1;
+function rand(){
+ seed = (seed * 16807) % 2147483647;
+ return (seed - 1) / 2147483646;
+}
+
+// ===== 1. Источник =====
+function generateBits(N){return Array.from({length:N},()=>rand()>0.5?1:0);}
+
 function qpskMod(bits){
  let s=[];
  for(let i=0;i<bits.length;i+=2){
@@ -32,7 +40,7 @@ function qpskMod(bits){
  return s;
 }
 
-// ===== 2. Канал (сложный) =====
+// ===== 2. Канал =====
 function getChannelH(){ return [0.5,-0.4,0.9,0.3,-0.5,0.2]; }
 function applyChannel(sig){
  const h=getChannelH();
@@ -55,13 +63,13 @@ function addNoise(sig,snr){
  const snrLin=Math.pow(10,snr/10);
  const noise=1/snrLin;
  return sig.map(s=>({
-  re:s.re+Math.sqrt(noise)*(Math.random()-0.5),
-  im:s.im+Math.sqrt(noise)*(Math.random()-0.5)
+  re:s.re+Math.sqrt(noise)*(rand()-0.5),
+  im:s.im+Math.sqrt(noise)*(rand()-0.5)
  }));
 }
 
-// ===== 4. LMS с обучением =====
-function lms(rx, tx, mu=0.05, taps=9){
+// ===== 4. LMS (СТАБИЛЬНЫЙ) =====
+function lms(rx, tx, mu=0.02, taps=13){
  let w=new Array(taps).fill(0);
  w[Math.floor(taps/2)]=1;
  let out=[];
@@ -75,7 +83,7 @@ function lms(rx, tx, mu=0.05, taps=9){
   }
 
   let dRe,dIm;
-  if(i<200){ // обучение
+  if(i<400){ // увеличенное обучение
     dRe=tx[i].re;
     dIm=tx[i].im;
   } else {
@@ -96,7 +104,7 @@ function lms(rx, tx, mu=0.05, taps=9){
  return {out,w};
 }
 
-// ===== 5. FFT =====
+// ===== FFT =====
 function fftReal(h){
  let N=128,mag=[];
  for(let k=0;k<N;k++){
@@ -111,7 +119,7 @@ function fftReal(h){
  return mag;
 }
 
-// ===== 6. Демодуляция =====
+// ===== Демодуляция =====
 function demod(sig){
  let bits=[];
  sig.forEach(s=>{
@@ -120,13 +128,14 @@ function demod(sig){
  });
  return bits;
 }
+
 function ber(a,b){
  let e=0;
  for(let i=0;i<b.length;i++) if(a[i]!=b[i]) e++;
  return e/b.length;
 }
 
-// ===== Графики =====
+// ===== ГРАФИКИ =====
 function plotACHH(h,w){
  let ch=fftReal(h);
  let eq=fftReal(w);
@@ -138,31 +147,31 @@ function plotACHH(h,w){
   {x,y:ch,name:'Канал'},
   {x,y:eq,name:'Эквалайзер'},
   {x,y:total,name:'ИТОГ'},
-  {x,y:ideal,name:'Идеал (0 дБ)', line:{dash:'dot'}}
- ],{title:'АЧХ: канал → эквалайзер → итог'});
+  {x,y:ideal,name:'Идеал',line:{dash:'dot'}}
+ ],{title:'АЧХ'});
 }
 
 function plotBERcurve(){
  let snrArr=[],berArr=[];
+
  for(let s=4;s<=16;s++){
-  let bits=generateBits(1000);
+  seed=1; // фикс для каждого SNR
+  let bits=generateBits(1500);
   let tx=qpskMod(bits);
   let ch=applyChannel(tx);
   let noisy=addNoise(ch,s);
   let {out:eq}=lms(noisy,tx);
   let rx=demod(eq);
   let b=ber(bits,rx);
+
   snrArr.push(s);
   berArr.push(b);
  }
 
  Plotly.newPlot('berPlot',[
   {x:snrArr,y:berArr,mode:'lines+markers',name:'BER'},
-  {x:[6,6],y:[1e-5,1],mode:'lines',name:'SNR=6 дБ',line:{dash:'dash'}}
- ],{
-  title:'BER vs SNR',
-  yaxis:{type:'log'}
- });
+  {x:[6,6],y:[1e-5,1],mode:'lines',name:'6 дБ',line:{dash:'dash'}}
+ ],{title:'BER vs SNR',yaxis:{type:'log'}});
 }
 
 function plotConst(id,data,title){
@@ -173,8 +182,9 @@ function plotConst(id,data,title){
  }],{title});
 }
 
-// ===== Запуск =====
+// ===== RUN =====
 function run(){
+ seed=1;
  let snr=parseFloat(snrSlider.value);
  snrVal.innerText=snr;
 
@@ -190,8 +200,8 @@ function run(){
 
  plotACHH(getChannelH(),w);
  plotBERcurve();
- plotConst('constBefore',noisy,'До эквалайзера');
- plotConst('constAfter',eq,'После эквалайзера');
+ plotConst('constBefore',noisy,'До');
+ plotConst('constAfter',eq,'После');
 }
 
 snrSlider.oninput=run;
