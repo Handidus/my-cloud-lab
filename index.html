@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адаптивный эквалайзер | Полная коррекция АЧХ</title>
+    <title>Адаптивный эквалайзер | Реалистичное моделирование</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js" charset="utf-8"></script>
     <style>
@@ -25,7 +25,7 @@
         <div class="text-center mb-8">
             <div class="animate-gradient h-32 rounded-3xl flex flex-col items-center justify-center mb-6 shadow-xl">
                 <h1 class="text-3xl md:text-4xl font-black uppercase tracking-wider drop-shadow-lg">Адаптивный эквалайзер</h1>
-                <p class="text-slate-200 text-sm mt-1">Коррекция АЧХ радиоканала | LMS алгоритм | MATLAB-подобное моделирование</p>
+                <p class="text-slate-200 text-sm mt-1">Реалистичная коррекция АЧХ | LMS алгоритм | QPSK модуляция</p>
             </div>
         </div>
 
@@ -66,15 +66,18 @@
                     <div id="plotFrequency" style="height: 450px;"></div>
                     <div class="grid grid-cols-3 gap-4 mt-3 text-center text-sm">
                         <div class="bg-slate-800/50 rounded-lg p-2">
-                            <span class="text-blue-400">🔵 Синяя</span> — АЧХ канала
+                            <span class="text-blue-400">🔵 Синяя</span> — Истинная АЧХ канала
                         </div>
                         <div class="bg-slate-800/50 rounded-lg p-2">
-                            <span class="text-green-400">🟢 Зеленая</span> — После эквалайзера
+                            <span class="text-green-400">🟢 Зеленая</span> — После эквалайзера <span class="text-yellow-300">(реалистично)</span>
                         </div>
                         <div class="bg-slate-800/50 rounded-lg p-2">
                             <span class="text-red-400">🔴 Красная пунктир</span> — Идеал (0 дБ)
                         </div>
                     </div>
+                    <p class="text-xs text-slate-400 text-center mt-3" id="eqNote">
+                        💡 Чем выше SNR, тем точнее эквалайзер выравнивает АЧХ
+                    </p>
                 </div>
             </div>
 
@@ -140,10 +143,11 @@
                 <div class="flex items-start gap-3">
                     <div class="text-2xl">🎯</div>
                     <div>
-                        <h3 class="font-bold text-blue-300">Результат моделирования</h3>
+                        <h3 class="font-bold text-blue-300">Реалистичное моделирование</h3>
                         <p class="text-sm text-slate-300 mt-1">
-                            ✅ <strong>Зеленая линия (после эквалайзера)</strong> успешно выравнивается до значений, близких к <strong class="text-yellow-300">0 дБ</strong> 
-                            на всем диапазоне частот. При <strong class="text-red-300">SNR = 6 дБ</strong> вероятность ошибки BER ≈ <strong class="text-green-300">1×10⁻³</strong>.
+                            ✅ <strong>Зеленая линия</strong> показывает результат работы эквалайзера <strong class="text-yellow-300">с учетом шума</strong>.
+                            При <strong>высоком SNR (13-16 дБ)</strong> зеленая линия близка к идеалу.
+                            При <strong>низком SNR (6 дБ)</strong> видны остаточные искажения — эквалайзер не может идеально выровнять АЧХ из-за шума.
                         </p>
                     </div>
                 </div>
@@ -157,7 +161,7 @@
 
     <script>
         // ============================================================
-        // ИСПРАВЛЕННАЯ МОДЕЛЬ — зеленый график теперь полный и ровный
+        // РЕАЛИСТИЧНОЕ МОДЕЛИРОВАНИЕ — с учетом шума при оценке АЧХ
         // ============================================================
 
         function calculateBER(snrDB) {
@@ -167,44 +171,51 @@
             return Math.min(0.5, Math.max(1e-8, q));
         }
 
-        // АЧХ канала с реалистичными искажениями
-        function getChannelResponse() {
-            const points = 500;  // Больше точек = глаже график
+        // Истинная АЧХ канала (без шума)
+        function getTrueChannelResponse() {
+            const points = 500;
             const freqs = [];
             const magDB = [];
             for (let i = 0; i <= points; i++) {
                 const f = i / points;
                 freqs.push(f);
-                // Два горба и провал
                 let db = 0;
                 db += 5.0 * Math.exp(-Math.pow((f - 0.22) / 0.1, 2));   // горб 1
                 db += 4.5 * Math.exp(-Math.pow((f - 0.68) / 0.09, 2));  // горб 2
                 db -= 6.0 * Math.exp(-Math.pow((f - 0.48) / 0.08, 2));   // провал
-                db += 1.0 * (f - 0.5);                                    // наклон
+                db += 1.0 * (f - 0.5);
                 magDB.push(db);
             }
             return { freqs, magDB };
         }
 
-        // ПРАВИЛЬНЫЙ LMS ЭКВАЛАЙЗЕР — без обрывов графика
-        function applyLmsEqualizer(channelDB, snrDB) {
-            const n = channelDB.length;
-            const filterOrder = 41;      // Высокий порядок для точной коррекции
+        // Измеренная АЧХ (с шумом, зависит от SNR)
+        function getMeasuredChannelResponse(snrDB) {
+            const { freqs, magDB } = getTrueChannelResponse();
+            // Шум в измерении АЧХ (тем больше, чем ниже SNR)
+            const noiseStd = 1.5 * Math.exp(-snrDB / 8);  // Эмпирическая зависимость
+            const noisyMag = magDB.map(v => v + (Math.random() - 0.5) * noiseStd * 2);
+            return { freqs, magDB: noisyMag, trueMag: magDB };
+        }
+
+        // LMS эквалайзер, обучающийся на зашумленной АЧХ
+        function applyLmsEqualizer(measuredChannel, snrDB) {
+            const n = measuredChannel.length;
+            const filterOrder = 35;
             let weights = new Array(filterOrder).fill(0);
             weights[Math.floor(filterOrder/2)] = 1;
             
-            // Адаптивный шаг обучения
-            const mu = 0.003 * Math.min(1.2, Math.max(0.2, snrDB / 10));
+            // Шаг адаптации зависит от SNR
+            const mu = 0.002 * Math.min(1.0, Math.max(0.15, snrDB / 10));
             
-            const target = 0;  // Цель — ровная линия на 0 дБ
-            const epochs = 120;  // Больше эпох для лучшей сходимости
+            const target = 0;
+            const epochs = Math.min(100, Math.floor(30 + snrDB * 2)); // Больше эпох при высоком SNR
             
-            // Обучение
             for (let epoch = 0; epoch < epochs; epoch++) {
                 for (let i = filterOrder; i < n; i++) {
                     let x = [];
                     for (let j = 0; j < filterOrder; j++) {
-                        x.push(channelDB[i - j]);
+                        x.push(measuredChannel[i - j]);
                     }
                     
                     let y = 0;
@@ -220,29 +231,32 @@
                 }
             }
             
-            // Применение эквалайзера ко всем точкам (без обрывов!)
+            // Применяем эквалайзер к ИСТИННОЙ АЧХ (показывает реальную эффективность)
+            const { magDB: trueChannel } = getTrueChannelResponse();
             const equalized = new Array(n);
             for (let i = 0; i < n; i++) {
                 let y = 0;
                 for (let j = 0; j < filterOrder; j++) {
-                    if (i - j >= 0) {
-                        y += weights[j] * channelDB[i - j];
-                    } else {
-                        // Для начала массива используем зеркальное отражение
-                        let idx = Math.abs(i - j);
-                        if (idx < n) y += weights[j] * channelDB[idx];
+                    const idx = i - j;
+                    if (idx >= 0 && idx < n) {
+                        y += weights[j] * trueChannel[idx];
+                    } else if (idx < 0 && -idx < n) {
+                        y += weights[j] * trueChannel[-idx];
                     }
                 }
                 equalized[i] = y;
             }
             
-            // Ограничиваем диапазон для красивого отображения
+            // Ограничиваем для красивого отображения
             for (let i = 0; i < n; i++) {
-                equalized[i] = Math.min(3, Math.max(-3, equalized[i]));
+                equalized[i] = Math.min(5, Math.max(-5, equalized[i]));
             }
             
             return equalized;
         }
+
+        let lastFreqs = null;
+        let lastTrueMag = null;
 
         function runSimulation() {
             const snr = parseFloat(document.getElementById('snrSlider').value);
@@ -256,25 +270,29 @@
             else if (ber < 0.01) berSpan.className = "text-2xl font-mono font-bold text-yellow-400";
             else berSpan.className = "text-2xl font-mono font-bold text-red-400";
             
-            const { freqs, magDB } = getChannelResponse();
-            const equalizedMag = applyLmsEqualizer(magDB, snr);
+            // Получаем измеренную (зашумленную) АЧХ и обучаем эквалайзер
+            const { freqs, trueMag } = getTrueChannelResponse();
+            const { magDB: measuredMag } = getMeasuredChannelResponse(snr);
+            
+            // Обучаем эквалайзер на зашумленных данных, применяем к истинным
+            const equalizedMag = applyLmsEqualizer(measuredMag, snr);
             
             // ГРАФИК АЧХ
-            const traceBefore = {
+            const traceTrue = {
                 x: freqs,
-                y: magDB,
+                y: trueMag,
                 mode: 'lines',
-                name: '📡 До выравнивания (канал с искажениями)',
+                name: '📡 Истинная АЧХ канала (без шума)',
                 line: { color: '#3b82f6', width: 3 },
                 fill: 'tozeroy',
                 fillcolor: 'rgba(59,130,246,0.1)'
             };
             
-            const traceAfter = {
+            const traceEqualized = {
                 x: freqs,
                 y: equalizedMag,
                 mode: 'lines',
-                name: '✅ После LMS эквалайзера',
+                name: '✅ После LMS эквалайзера (с учетом шума)',
                 line: { color: '#22c55e', width: 3 }
             };
             
@@ -284,6 +302,17 @@
                 mode: 'lines',
                 name: '🎯 Идеально ровная АЧХ (0 дБ)',
                 line: { color: '#ef4444', width: 2, dash: 'dot' }
+            };
+            
+            // Добавляем зашумленную АЧХ для наглядности (полупрозрачная)
+            const traceMeasured = {
+                x: freqs,
+                y: measuredMag,
+                mode: 'lines',
+                name: '📉 Измеренная АЧХ (с шумом)',
+                line: { color: '#f59e0b', width: 1.5, dash: 'dot' },
+                opacity: 0.5,
+                visible: 'legendonly'  // скрыта по умолчанию, но можно включить
             };
             
             const layoutFreq = {
@@ -296,7 +325,7 @@
                 margin: { l: 60, r: 30, t: 60, b: 40 }
             };
             
-            Plotly.newPlot('plotFrequency', [traceBefore, traceAfter, traceIdeal], layoutFreq, { responsive: true });
+            Plotly.newPlot('plotFrequency', [traceTrue, traceEqualized, traceIdeal, traceMeasured], layoutFreq, { responsive: true });
             
             // ГРАФИК BER
             const snrRange = [];
