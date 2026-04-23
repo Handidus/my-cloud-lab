@@ -1,396 +1,135 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адаптивный эквалайзер | Правильные графики</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.plot.ly/plotly-3.1.0.min.js" charset="utf-8"></script>
-    <style>
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        .animate-gradient {
-            background: linear-gradient(-45deg, #1e3a5f, #2e1a5f, #5f1a3a, #1a5f3a);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Полная модель эквалайзера</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
-<body class="bg-slate-900 text-white min-h-screen font-sans p-4">
+<body class="bg-slate-900 text-white p-4">
 
-    <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-8">
-            <div class="animate-gradient h-32 rounded-3xl flex flex-col items-center justify-center mb-6 shadow-xl">
-                <h1 class="text-3xl md:text-4xl font-black uppercase tracking-wider drop-shadow-lg">Адаптивный эквалайзер</h1>
-                <p class="text-slate-200 text-sm mt-1">Коррекция АЧХ радиоканала | LMS алгоритм | QPSK модуляция</p>
-            </div>
-        </div>
+<h1 class="text-2xl font-bold mb-4">Моделирование QPSK + LMS эквалайзера</h1>
 
-        <div class="bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-slate-700">
-            
-            <div class="bg-slate-900 rounded-xl p-5 mb-6 border border-slate-700">
-                <div class="flex flex-col md:flex-row gap-6 items-center">
-                    <div class="flex-1">
-                        <div class="flex justify-between mb-2">
-                            <label class="text-sm font-medium text-slate-300">Отношение сигнал/шум (SNR):</label>
-                            <span class="text-blue-400 font-bold font-mono text-xl" id="snrValue">12</span>
-                            <span class="text-slate-400">дБ</span>
-                        </div>
-                        <input type="range" id="snrSlider" min="4" max="16" step="0.5" value="12" 
-                               class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
-                        <div class="flex justify-between text-xs text-slate-500 mt-2">
-                            <span>4 дБ</span>
-                            <span class="text-red-400">⚠️ 6 дБ (предел)</span>
-                            <span>10 дБ</span>
-                            <span>13 дБ</span>
-                            <span>16 дБ</span>
-                        </div>
-                    </div>
-                    <div class="bg-slate-800 rounded-lg p-3 text-center min-w-[200px]">
-                        <p class="text-xs text-slate-400">Вероятность ошибки (BER)</p>
-                        <p id="berValue" class="text-2xl font-mono font-bold text-emerald-400">—</p>
-                        <p class="text-[10px] text-slate-500">при текущем SNR</p>
-                    </div>
-                </div>
-            </div>
+<label>SNR: <span id="snrVal">10</span> дБ</label>
+<input type="range" min="4" max="16" step="1" value="10" id="snrSlider" class="w-full">
 
-            <!-- График 1: АЧХ -->
-            <div class="mb-8">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2 h-6 bg-blue-500 rounded-full"></div>
-                    <h2 class="text-xl font-bold">📊 Коррекция амплитудно-частотной характеристики (АЧХ)</h2>
-                </div>
-                <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                    <div id="plotFrequency" style="height: 450px;"></div>
-                    <div class="grid grid-cols-3 gap-4 mt-3 text-center text-sm">
-                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-blue-400">🔵 Синяя</span> — Истинная АЧХ канала</div>
-                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-green-400">🟢 Зеленая</span> — После эквалайзера</div>
-                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-red-400">🔴 Красная пунктир</span> — Идеал (0 дБ)</div>
-                    </div>
-                </div>
-            </div>
+<div class="mt-4">BER: <span id="ber"></span></div>
 
-            <!-- График 2: BER vs SNR (С ПРАВИЛЬНЫМИ ОСЯМИ) -->
-            <div class="mb-8">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2 h-6 bg-purple-500 rounded-full"></div>
-                    <h2 class="text-xl font-bold">📈 Зависимость вероятности ошибки от отношения сигнал/шум</h2>
-                </div>
-                <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                    <div id="plotBer" style="height: 400px;"></div>
-                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs text-center">
-                        <div class="bg-slate-800/30 rounded p-1"><span class="text-red-400">Красный пунктир</span> — предел SNR = 6 дБ</div>
-                        <div class="bg-slate-800/30 rounded p-1"><span class="text-green-400">Зеленый пунктир</span> — порог BER = 10⁻³</div>
-                        <div class="bg-slate-800/30 rounded p-1"><span class="text-yellow-400">⭐ Желтая точка</span> — текущий режим</div>
-                    </div>
-                    <p class="text-xs text-slate-400 text-center mt-2">
-                        📌 <strong>Ось X (горизонтальная):</strong> SNR (дБ) &nbsp;&nbsp;|&nbsp;&nbsp;
-                        <strong>Ось Y (вертикальная):</strong> BER (логарифмическая шкала)
-                    </p>
-                </div>
-            </div>
+<div id="constBefore" style="height:300px"></div>
+<div id="constAfter" style="height:300px"></div>
 
-            <!-- Блок-схема -->
-            <div class="mb-6">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2 h-6 bg-emerald-500 rounded-full"></div>
-                    <h2 class="text-xl font-bold">🔧 Структурно-функциональная блок-схема</h2>
-                </div>
-                <div class="bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
-                    <pre class="text-xs md:text-sm font-mono text-slate-300 whitespace-pre leading-relaxed">
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ПЕРЕДАТЧИК                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────────────────────┐      │
-│  │ Источник │───→│ QPSK модулятор│───→│ Формирователь радиосигнала  │      │
-│  │   битов  │    │   (символы)   │    │     (несущая частота)        │      │
-│  └──────────┘    └──────────────┘    └──────────────┬───────────────┘      │
-└─────────────────────────────────────────────────────┼───────────────────────┘
-                                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         РАДИОКАНАЛ                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │  Многолучевое распространение → АЧХ с горбами/провалами            │     │
-│  │  + Аддитивный белый гауссовский шум (AWGN)   SNR = 6-13 дБ        │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────┬───────────────────────┘
-                                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ПРИЕМНИК                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐    ┌─────────────────────────────────────────────────┐   │
-│  │  Демодуляция │←───│       АДАПТИВНЫЙ ЭКВАЛАЙЗЕР (LMS)               │   │
-│  │   (QPSK)     │    │  ┌─────────────────────────────────────────┐    │   │
-│  └──────┬───────┘    │  │   Инициализация весов w[0..L-1]         │    │   │
-│         │            │  │              ↓                          │    │   │
-│         ▼            │  │   Для каждого отсчета:                  │    │   │
-│  ┌──────────────┐    │  │     y = wᵀ·x  (выход фильтра)           │    │   │
-│  │ Восстанов-   │    │  │     e = d - y (ошибка)                  │    │   │
-│  │ ленные биты  │    │  │     w = w + μ·e·x (обновление весов)    │    │   │
-│  └──────────────┘    │  └─────────────────────────────────────────┘    │   │
-│                      │         ↓                                        │   │
-│                      │   ┌──────────────────┐                          │   │
-│                      │   │ Выравненный сигнал│                          │   │
-│                      │   └──────────────────┘                          │   │
-│                      └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                    </pre>
-                </div>
-            </div>
+<script>
+function generateBits(N){return Array.from({length:N},()=>Math.random()>0.5?1:0);}
 
-            <div class="bg-gradient-to-r from-blue-950/50 to-purple-950/50 rounded-xl p-4 border border-blue-800/50">
-                <div class="flex items-start gap-3">
-                    <div class="text-2xl">🎯</div>
-                    <div>
-                        <h3 class="font-bold text-blue-300">Анализ результатов</h3>
-                        <p class="text-sm text-slate-300 mt-1">
-                            📌 <strong>При SNR = 6 дБ (предел):</strong> BER ≈ 1×10⁻³ — эквалайзер еще работает.<br>
-                            📌 <strong>При SNR = 12 дБ:</strong> BER ≈ 1.6×10⁻⁸ — ошибок практически нет.<br>
-                            📌 <strong>Зеленая линия на АЧХ</strong> показывает остаточные искажения после эквалайзера (не идеальна, что реалистично).
-                        </p>
-                    </div>
-                </div>
-            </div>
+function qpskMod(bits){
+ let s=[];
+ for(let i=0;i<bits.length;i+=2){
+  let re=bits[i]? -1:1;
+  let im=bits[i+1]? -1:1;
+  s.push({re,im});
+ }
+ return s;
+}
 
-            <div class="mt-6 pt-4 border-t border-slate-700 text-center text-xs text-slate-500">
-                Моделирование адаптивного эквалайзера | LMS алгоритм | QPSK модуляция | SNR: 4-16 дБ
-            </div>
-        </div>
-    </div>
+function applyChannel(sig){
+ const h=[0.9,0.3,-0.2,0.1];
+ let out=[];
+ for(let i=0;i<sig.length;i++){
+  let re=0,im=0;
+  for(let j=0;j<h.length;j++){
+   if(i-j>=0){
+    re+=h[j]*sig[i-j].re;
+    im+=h[j]*sig[i-j].im;
+   }
+  }
+  out.push({re,im});
+ }
+ return out;
+}
 
-    <script>
-        // ============================================================
-        // ПРАВИЛЬНЫЕ ГРАФИКИ — оси X и Y не перепутаны
-        // ============================================================
+function addNoise(sig,snr){
+ const snrLin=Math.pow(10,snr/10);
+ const noise=1/snrLin;
+ return sig.map(s=>({
+  re:s.re+Math.sqrt(noise)*(Math.random()-0.5),
+  im:s.im+Math.sqrt(noise)*(Math.random()-0.5)
+ }));
+}
 
-        function calculateBER(snrDB) {
-            const snrLin = Math.pow(10, snrDB / 10);
-            const x = Math.sqrt(2 * snrLin);
-            const q = 0.5 * Math.exp(-0.5 * x * x) / (1.2533 + 0.5 * Math.abs(x));
-            return Math.min(0.5, Math.max(1e-8, q));
-        }
+function lms(rx,mu=0.01,taps=5){
+ let w=new Array(taps).fill(0);
+ w[Math.floor(taps/2)]=1;
+ let out=[];
+ for(let i=taps;i<rx.length;i++){
+  let yRe=0,yIm=0;
+  for(let j=0;j<taps;j++){
+   yRe+=w[j]*rx[i-j].re;
+   yIm+=w[j]*rx[i-j].im;
+  }
+  let dRe=yRe>0?1:-1;
+  let dIm=yIm>0?1:-1;
+  let eRe=dRe-yRe;
+  let eIm=dIm-yIm;
+  for(let j=0;j<taps;j++){
+   w[j]+=mu*(eRe*rx[i-j].re+eIm*rx[i-j].im);
+  }
+  out.push({re:yRe,im:yIm});
+ }
+ return out;
+}
 
-        function getTrueChannelResponse() {
-            const points = 500;
-            const freqs = [];
-            const magDB = [];
-            for (let i = 0; i <= points; i++) {
-                const f = i / points;
-                freqs.push(f);
-                let db = 0;
-                db += 5.0 * Math.exp(-Math.pow((f - 0.22) / 0.1, 2));
-                db += 4.5 * Math.exp(-Math.pow((f - 0.68) / 0.09, 2));
-                db -= 6.0 * Math.exp(-Math.pow((f - 0.48) / 0.08, 2));
-                db += 1.0 * (f - 0.5);
-                magDB.push(db);
-            }
-            return { freqs, magDB };
-        }
+function demod(sig){
+ let bits=[];
+ sig.forEach(s=>{
+  bits.push(s.re<0?1:0);
+  bits.push(s.im<0?1:0);
+ });
+ return bits;
+}
 
-        function getMeasuredChannelResponse(snrDB) {
-            const { freqs, magDB } = getTrueChannelResponse();
-            const noiseStd = 1.8 * Math.exp(-snrDB / 8);
-            const noisyMag = magDB.map(v => v + (Math.random() - 0.5) * noiseStd * 2);
-            return { freqs, magDB: noisyMag, trueMag: magDB };
-        }
+function ber(a,b){
+ let e=0;
+ for(let i=0;i<a.length;i++) if(a[i]!=b[i]) e++;
+ return e/a.length;
+}
 
-        function applyLmsEqualizer(measuredChannel, snrDB) {
-            const n = measuredChannel.length;
-            const filterOrder = 35;
-            let weights = new Array(filterOrder).fill(0);
-            weights[Math.floor(filterOrder/2)] = 1;
-            
-            const mu = 0.002 * Math.min(1.0, Math.max(0.15, snrDB / 10));
-            const target = 0;
-            const epochs = Math.min(100, Math.floor(30 + snrDB * 2));
-            
-            for (let epoch = 0; epoch < epochs; epoch++) {
-                for (let i = filterOrder; i < n; i++) {
-                    let x = [];
-                    for (let j = 0; j < filterOrder; j++) {
-                        x.push(measuredChannel[i - j]);
-                    }
-                    let y = 0;
-                    for (let j = 0; j < filterOrder; j++) {
-                        y += weights[j] * x[j];
-                    }
-                    let error = target - y;
-                    for (let j = 0; j < filterOrder; j++) {
-                        weights[j] += mu * error * x[j];
-                    }
-                }
-            }
-            
-            const { magDB: trueChannel } = getTrueChannelResponse();
-            const equalized = new Array(n);
-            for (let i = 0; i < n; i++) {
-                let y = 0;
-                for (let j = 0; j < filterOrder; j++) {
-                    const idx = i - j;
-                    if (idx >= 0 && idx < n) {
-                        y += weights[j] * trueChannel[idx];
-                    } else if (idx < 0 && -idx < n) {
-                        y += weights[j] * trueChannel[-idx];
-                    }
-                }
-                equalized[i] = y;
-            }
-            
-            for (let i = 0; i < n; i++) {
-                equalized[i] = Math.min(5, Math.max(-5, equalized[i]));
-            }
-            
-            return equalized;
-        }
+function plotConst(id,data,title){
+ Plotly.newPlot(id,[{
+  x:data.map(s=>s.re),
+  y:data.map(s=>s.im),
+  mode:'markers'
+ }],{
+  title:title,
+  paper_bgcolor:'#0f172a',
+  plot_bgcolor:'#0f172a',
+  xaxis:{title:'I'},
+  yaxis:{title:'Q'}
+ });
+}
 
-        function runSimulation() {
-            const snr = parseFloat(document.getElementById('snrSlider').value);
-            document.getElementById('snrValue').innerText = snr.toFixed(1);
-            
-            const ber = calculateBER(snr);
-            document.getElementById('berValue').innerHTML = ber.toExponential(2);
-            
-            const berSpan = document.getElementById('berValue');
-            if (ber < 1e-3) berSpan.className = "text-2xl font-mono font-bold text-emerald-400";
-            else if (ber < 0.01) berSpan.className = "text-2xl font-mono font-bold text-yellow-400";
-            else berSpan.className = "text-2xl font-mono font-bold text-red-400";
-            
-            const { freqs, trueMag } = getTrueChannelResponse();
-            const { magDB: measuredMag } = getMeasuredChannelResponse(snr);
-            const equalizedMag = applyLmsEqualizer(measuredMag, snr);
-            
-            // ГРАФИК АЧХ
-            const traceTrue = {
-                x: freqs,
-                y: trueMag,
-                mode: 'lines',
-                name: '📡 Истинная АЧХ канала (без шума)',
-                line: { color: '#3b82f6', width: 3 },
-                fill: 'tozeroy',
-                fillcolor: 'rgba(59,130,246,0.1)'
-            };
-            
-            const traceEqualized = {
-                x: freqs,
-                y: equalizedMag,
-                mode: 'lines',
-                name: '✅ После LMS эквалайзера (с учетом шума)',
-                line: { color: '#22c55e', width: 3 }
-            };
-            
-            const traceIdeal = {
-                x: [0, 1],
-                y: [0, 0],
-                mode: 'lines',
-                name: '🎯 Идеально ровная АЧХ (0 дБ)',
-                line: { color: '#ef4444', width: 2, dash: 'dot' }
-            };
-            
-            const layoutFreq = {
-                title: { text: 'Коррекция амплитудно-частотной характеристики радиоканала', font: { color: '#f1f5f9', size: 16 }, x: 0.05, xanchor: 'left' },
-                xaxis: { title: 'Нормированная частота (×π рад/с)', color: '#94a3b8', gridcolor: '#334155', range: [0, 1], dtick: 0.2 },
-                yaxis: { title: 'АЧХ (дБ)', color: '#94a3b8', gridcolor: '#334155', range: [-8, 8], dtick: 2 },
-                plot_bgcolor: '#0f172a',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                legend: { font: { color: '#cbd5e1', size: 11 }, bgcolor: 'rgba(15,23,42,0.8)', bordercolor: '#334155', borderwidth: 1, x: 0.02, y: 0.98, xanchor: 'left', yanchor: 'top' },
-                margin: { l: 60, r: 30, t: 60, b: 40 }
-            };
-            
-            Plotly.newPlot('plotFrequency', [traceTrue, traceEqualized, traceIdeal], layoutFreq, { responsive: true });
-            
-            // ГРАФИК BER vs SNR — ПРАВИЛЬНЫЕ ОСИ
-            const snrRange = [];
-            const berRange = [];
-            for (let s = 3; s <= 17; s += 0.25) {
-                snrRange.push(s);
-                berRange.push(calculateBER(s));
-            }
-            
-            const berTrace = {
-                x: snrRange,  // X = SNR (дБ)
-                y: berRange,  // Y = BER
-                mode: 'lines',
-                name: 'BER (QPSK модуляция)',
-                line: { color: '#a855f7', width: 3 },
-                fill: 'tozeroy',
-                fillcolor: 'rgba(168,85,247,0.1)'
-            };
-            
-            // Вертикальная линия на 6 дБ (предел SNR)
-            const threshold6 = {
-                x: [6, 6],
-                y: [1e-8, 0.5],
-                mode: 'lines',
-                name: '⚠️ Предел SNR = 6 дБ',
-                line: { color: '#ef4444', width: 2.5, dash: 'dash' }
-            };
-            
-            // Горизонтальная линия на BER = 10⁻³
-            const thresholdBer = {
-                x: [3, 17],
-                y: [0.001, 0.001],
-                mode: 'lines',
-                name: '🎯 Порог BER = 10⁻³',
-                line: { color: '#10b981', width: 2, dash: 'dash' }
-            };
-            
-            const currentPoint = {
-                x: [snr],
-                y: [ber],
-                mode: 'markers',
-                name: `⭐ Текущий режим: SNR = ${snr.toFixed(1)} дБ, BER = ${ber.toExponential(2)}`,
-                marker: { color: '#fbbf24', size: 12, symbol: 'circle', line: { color: '#fff', width: 2 } }
-            };
-            
-            const layoutBer = {
-                title: { 
-                    text: 'Зависимость вероятности ошибки на бит (BER) от отношения сигнал/шум (SNR)', 
-                    font: { color: '#f1f5f9', size: 16 }, 
-                    x: 0.05, 
-                    xanchor: 'left' 
-                },
-                xaxis: { 
-                    title: 'SNR (дБ)',                           // ← ПРАВИЛЬНО: X — это SNR
-                    color: '#94a3b8', 
-                    gridcolor: '#334155', 
-                    range: [3, 17],
-                    dtick: 2
-                },
-                yaxis: { 
-                    title: 'Вероятность ошибки на бит (BER)',    // ← ПРАВИЛЬНО: Y — это BER
-                    color: '#94a3b8', 
-                    gridcolor: '#334155', 
-                    type: 'log', 
-                    range: [-7, 0], 
-                    tickformat: '.0e',
-                    dtick: 1
-                },
-                plot_bgcolor: '#0f172a',
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                legend: { 
-                    font: { color: '#cbd5e1', size: 11 }, 
-                    bgcolor: 'rgba(15,23,42,0.8)', 
-                    bordercolor: '#334155', 
-                    borderwidth: 1, 
-                    x: 0.02, 
-                    y: 0.98, 
-                    xanchor: 'left', 
-                    yanchor: 'top' 
-                },
-                margin: { l: 70, r: 30, t: 70, b: 50 }
-            };
-            
-            Plotly.newPlot('plotBer', [berTrace, threshold6, thresholdBer, currentPoint], layoutBer, { responsive: true });
-        }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            runSimulation();
-            document.getElementById('snrSlider').addEventListener('input', () => runSimulation());
-        });
-    </script>
+function run(){
+ let snr=parseFloat(document.getElementById('snrSlider').value);
+ document.getElementById('snrVal').innerText=snr;
+
+ let bits=generateBits(2000);
+ let tx=qpskMod(bits);
+ let ch=applyChannel(tx);
+ let noisy=addNoise(ch,snr);
+ let eq=lms(noisy);
+
+ let rxBits=demod(eq);
+ let b=ber(bits.slice(0,rxBits.length),rxBits);
+
+ document.getElementById('ber').innerText=b.toExponential(2);
+
+ plotConst('constBefore',noisy,'До эквалайзера');
+ plotConst('constAfter',eq,'После эквалайзера');
+}
+
+snrSlider.oninput=run;
+run();
+</script>
+
 </body>
 </html>
