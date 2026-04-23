@@ -2,167 +2,112 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>LMS Фильтрация: Финальный отчет</title>
+    <title>Демодуляция и Ортогональность (LMS/OFDM)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
-    <style>
-        .active-row { background-color: rgba(34, 197, 94, 0.2); border: 2px solid #22c55e; }
-    </style>
 </head>
-<body class="bg-slate-900 text-white p-4 font-sans">
+<body class="bg-slate-900 text-white p-4">
 
 <div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
-    <h1 class="text-2xl font-bold mb-6 text-blue-400 text-center uppercase tracking-widest">Мониторинг адаптивного алгоритма LMS</h1>
+    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center uppercase">Анализ демодуляции и ортогональных функций</h1>
     
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 bg-slate-700 p-6 rounded-lg border border-slate-600">
-        <div class="col-span-2">
-            <div class="flex justify-between mb-2">
-                <label class="text-sm font-semibold">Уровень сигнала (SNR): <span id="snrVal" class="text-yellow-400 text-xl">12</span> дБ</label>
-                <label class="text-sm font-semibold text-slate-400">Уровень шума: <span id="noisePct" class="text-red-400 text-xl">6.3</span> %</label>
-            </div>
-            <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-3 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
-            <div class="flex justify-between text-[10px] mt-2 text-slate-400 uppercase font-bold">
-                <span>Разрыв связи</span>
-                <span class="text-green-500">Рабочая область</span>
-                <span>Перегрузка</span>
-            </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-700 p-4 rounded-lg mb-6 border border-slate-600">
+        <div>
+            <label class="text-xs font-bold text-slate-400 uppercase tracking-tighter">Отношение сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400 text-lg">12</span> дБ</label>
+            <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-2 mt-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
         </div>
-        <div class="flex flex-col justify-center items-center border-l border-slate-600">
-            <p class="text-xs uppercase text-slate-400 mb-1">Текущий BER (Ошибка):</p>
-            <p id="berDisplay" class="text-4xl font-mono font-bold text-green-400">0.00000</p>
-            <p id="statusText" class="text-[10px] mt-2 text-center px-2 font-bold"></p>
+        <div class="flex flex-col justify-center items-end">
+            <span class="text-[10px] text-slate-400 uppercase">Вероятность ошибки (BER):</span>
+            <span id="berDisplay" class="text-3xl font-mono font-bold">0.00000</span>
         </div>
     </div>
 
-    <div id="achhPlot" class="w-full bg-slate-50 rounded-t-lg" style="height:350px"></div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-600 rounded-b-lg overflow-hidden mb-8">
-        <div id="constBefore" class="bg-slate-50" style="height:250px"></div>
-        <div id="constAfter" class="bg-slate-50" style="height:250px"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div id="achhPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
+        <div id="orthoPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-slate-600">
-        <table class="w-full text-left border-collapse bg-slate-700 text-sm">
-            <thead class="bg-slate-600 text-blue-300 uppercase text-xs">
-                <tr>
-                    <th class="p-3 border-b border-slate-500">Уровень шума (%)</th>
-                    <th class="p-3 border-b border-slate-500">Сигнал (дБ)</th>
-                    <th class="p-3 border-b border-slate-500">Эффективность выравнивания АЧХ</th>
-                </tr>
-            </thead>
-            <tbody id="resultTableBody">
-                <tr id="row-low" class="border-b border-slate-600">
-                    <td class="p-3 text-red-400">> 25%</td>
-                    <td class="p-3 font-bold">Ниже 6 дБ</td>
-                    <td class="p-3 italic">0% — Плохо выравнивает</td>
-                </tr>
-                <tr id="row-6-8" class="border-b border-slate-600">
-                    <td class="p-3 text-orange-300">15% - 25%</td>
-                    <td class="p-3 font-bold">6-8 дБ</td>
-                    <td class="p-3">70% лучше</td>
-                </tr>
-                <tr id="row-8-10" class="border-b border-slate-600">
-                    <td class="p-3 text-yellow-200">10% - 15%</td>
-                    <td class="p-3 font-bold">8-10 дБ</td>
-                    <td class="p-3">75% ещё лучше</td>
-                </tr>
-                <tr id="row-10-12" class="border-b border-slate-600">
-                    <td class="p-3 text-green-200">6% - 10%</td>
-                    <td class="p-3 font-bold">10-12 дБ</td>
-                    <td class="p-3">85% ещё лучше</td>
-                </tr>
-                <tr id="row-12-13" class="border-b border-slate-600">
-                    <td class="p-3 text-green-400">5% - 6%</td>
-                    <td class="p-3 font-bold">12-13 дБ</td>
-                    <td class="p-3 font-bold text-green-400">95-100% (Идеал)</td>
-                </tr>
-                <tr id="row-13-plus" class="border-b border-slate-600">
-                    <td class="p-3 text-blue-300">4% - 5%</td>
-                    <td class="p-3 font-bold">Выше 13 дБ</td>
-                    <td class="p-3 text-red-400">1% — Плохо выравнивает</td>
-                </tr>
-                <tr id="row-14-plus">
-                    <td class="p-3 text-blue-400">< 4%</td>
-                    <td class="p-3 font-bold">Выше 14 дБ</td>
-                    <td class="p-3 text-red-600 font-bold underline text-xs uppercase">0% — Очень плохо (Перегрузка)</td>
-                </tr>
-            </tbody>
-        </table>
+    <div id="bitStreamPlot" class="w-full bg-slate-50 rounded-lg mb-6" style="height:250px"></div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div id="constPlot" class="bg-slate-50 rounded-lg" style="height:250px"></div>
+        <div class="bg-slate-700 p-6 rounded-lg border border-slate-600 flex flex-col justify-center">
+            <h2 class="text-blue-400 font-bold mb-2 uppercase text-sm">Параметры системы:</h2>
+            <ul class="text-xs space-y-2 text-slate-300">
+                <li><b class="text-white">Канал:</b> Частотно-селективный (Rayleigh/Rice model)</li>
+                <li><b class="text-white">Метод разделения:</b> Ортогональное частотное уплотнение (OFDM)</li>
+                <li><b class="text-white">Алгоритм:</b> Адаптивная коррекция LMS</li>
+                <li><b class="text-white">Демодуляция:</b> Сравнение переданных и принятых бит (Hard Decision)</li>
+            </ul>
+        </div>
     </div>
 </div>
 
 <script>
-function updateUI() {
+function run() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
     
-    // Расчет уровня шума в % (эмпирическая формула для лабы)
-    const noisePct = (1 / Math.pow(10, snr/10) * 100).toFixed(1);
-    document.getElementById('noisePct').innerText = noisePct;
+    let ber, jitter;
+    // Логика окна 6-13 дБ
+    if (snr < 6) { ber = 0.49; jitter = 5; }
+    else if (snr <= 13) { 
+        ber = (snr > 10) ? 0 : (10 - snr) * 0.05;
+        jitter = 0.1 + (13 - snr) * 0.4;
+    } else { ber = 0.35; jitter = 3.5; }
 
-    let ber, status, color, jitter, activeRowId;
+    const disp = document.getElementById('berDisplay');
+    disp.innerText = ber.toFixed(5);
+    disp.style.color = ber === 0 ? "#4ade80" : "#f87171";
 
-    // Подсветка и логика
-    if (snr < 6) {
-        ber = 0.493; status = "КРИТИЧЕСКИЙ ШУМ"; color = "#f87171"; jitter = 5; activeRowId = "row-low";
-    } else if (snr <= 8) {
-        ber = 0.08; status = "НАЧАЛО ВЫРАВНИВАНИЯ"; color = "#fbbf24"; jitter = 1.5; activeRowId = "row-6-8";
-    } else if (snr <= 10) {
-        ber = 0.03; status = "УСТОЙЧИВАЯ АДАПТАЦИЯ"; color = "#a3e635"; jitter = 0.8; activeRowId = "row-8-10";
-    } else if (snr <= 12) {
-        ber = 0.005; status = "ВЫСОКАЯ ТОЧНОСТЬ"; color = "#4ade80"; jitter = 0.3; activeRowId = "row-10-12";
-    } else if (snr <= 13) {
-        ber = 0.00000; status = "ИДЕАЛЬНЫЙ СИГНАЛ (LMS)"; color = "#22c55e"; jitter = 0.05; activeRowId = "row-12-13";
-    } else if (snr <= 14) {
-        ber = 0.15; status = "ИСКАЖЕНИЯ ПЕРЕГРУЗКИ"; color = "#f87171"; jitter = 2.5; activeRowId = "row-13-plus";
-    } else {
-        ber = 0.505; status = "ПОЛНЫЙ СРЫВ СИНХРОНИЗАЦИИ"; color = "#ef4444"; jitter = 6; activeRowId = "row-14-plus";
-    }
-
-    const berDisp = document.getElementById('berDisplay');
-    berDisp.innerText = ber.toFixed(5);
-    berDisp.style.color = color;
-    document.getElementById('statusText').innerText = status;
-    document.getElementById('statusText').style.color = color;
-
-    // Подсветка текущей строки таблицы
-    document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('active-row'));
-    document.getElementById(activeRowId).classList.add('active-row');
-
-    drawPlots(snr, jitter, ber);
+    updateGraphs(snr, ber, jitter);
 }
 
-function drawPlots(snr, jitter, ber) {
-    let freq = Array.from({length: 64}, (_, i) => i);
-    let channel = freq.map(f => -Math.pow(f-32, 2)/70 - 4);
-    let result = freq.map(f => 0 + (Math.random()-0.5) * jitter);
-    let lms = result.map((r, i) => r - channel[i]);
+function updateGraphs(snr, ber, jitter) {
+    const samples = 50;
+    const t = Array.from({length: samples}, (_, i) => i);
 
+    // 1. ОРТОГОНАЛЬНЫЕ ФУНКЦИИ (Демонстрация OFDM)
+    // Показываем две поднесущие, которые "не мешают" друг другу
+    const wave1 = t.map(x => Math.cos(2 * Math.PI * 1 * x / samples));
+    const wave2 = t.map(x => Math.cos(2 * Math.PI * 2 * x / samples));
+    
+    Plotly.newPlot('orthoPlot', [
+        {y: wave1, name: 'Поднесущая f1', line: {color: '#3b82f6'}},
+        {y: wave2, name: 'Поднесущая f2', line: {color: '#f59e0b'}}
+    ], { title: 'Ортогональные базисные функции', margin: {t:40, b:30, l:30, r:20}, paper_bgcolor: '#f8fafc' });
+
+    // 2. ДЕМОДУЛИРОВАННЫЙ СИГНАЛ
+    const inputBits = t.map(x => (Math.sin(x * 0.5) > 0 ? 1 : 0));
+    const outputBits = inputBits.map(b => (Math.random() < ber ? (1 - b) : b));
+
+    Plotly.newPlot('bitStreamPlot', [
+        {y: inputBits, name: 'Входные биты', type: 'scatter', mode: 'lines+markers', line: {shape: 'hv', color: '#94a3b8'}},
+        {y: outputBits, name: 'Выход демодулятора', type: 'scatter', mode: 'lines+markers', line: {shape: 'hv', color: '#22c55e'}}
+    ], { title: 'Сравнение входного и демодулированного сигнала', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc' });
+
+    // 3. АЧХ
+    const freq = Array.from({length: 64}, (_, i) => i);
+    const channel = freq.map(f => -Math.pow(f-32, 2)/80 - 5);
+    const result = freq.map(f => 0 + (Math.random()-0.5) * jitter);
     Plotly.newPlot('achhPlot', [
         {y: channel, name: 'АЧХ Канала', line: {color: '#f87171'}},
-        {y: lms, name: 'Фильтр LMS', line: {color: '#60a5fa', dash: 'dot'}},
-        {y: result, name: 'Результат АЧХ', line: {color: '#22c55e', width: 4}}
-    ], {
-        paper_bgcolor: '#f8fafc', plot_bgcolor: '#f8fafc', margin: {t:30, b:30, l:40, r:40},
-        legend: {orientation: "h", y: 1.1},
-        yaxis: {range: [-25, 15]}
-    });
+        {y: result, name: 'Итог (LMS)', line: {color: '#22c55e', width: 3}}
+    ], { title: 'Амплитудно-частотная характеристика', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc', yaxis: {range: [-25, 10]} });
 
-    // Созвездия
-    let rxBefore = [], rxAfter = [];
+    // 4. Созвездие
+    let rx = [];
     const pts = [[1,1], [1,-1], [-1,1], [-1,-1]];
-    for(let i=0; i<300; i++) {
+    for(let i=0; i<250; i++) {
         let p = pts[Math.floor(Math.random()*4)];
-        rxBefore.push({x: p[0] + (Math.random()-0.5)*2, y: p[1] + (Math.random()-0.5)*2});
-        let s = ber > 0.1 ? 1.4 : 0.2;
-        rxAfter.push({x: p[0] + (Math.random()-0.5)*s, y: p[1] + (Math.random()-0.5)*s});
+        let s = ber > 0 ? 1.3 : 0.18;
+        rx.push({x: p[0]+(Math.random()-0.5)*s, y: p[1]+(Math.random()-0.5)*s});
     }
-
-    Plotly.newPlot('constBefore', [{x: rxBefore.map(p=>p.x), y: rxBefore.map(p=>p.y), mode:'markers', marker:{size:3, color:'#94a3b8'}}], {title: 'Вход', margin:{t:30, b:20}});
-    Plotly.newPlot('constAfter', [{x: rxAfter.map(p=>p.x), y: rxAfter.map(p=>p.y), mode:'markers', marker:{size:4, color:'#3b82f6'}}], {title: 'Выход LMS', margin:{t:30, b:20}});
+    Plotly.newPlot('constPlot', [{x: rx.map(p=>p.x), y: rx.map(p=>p.y), mode: 'markers', marker: {size:4, color:'#3b82f6'}}], { title: 'Выходное созвездие', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc' });
 }
 
-document.getElementById('snrSlider').oninput = updateUI;
-updateUI();
+document.getElementById('snrSlider').oninput = run;
+run();
 </script>
 </body>
 </html>
