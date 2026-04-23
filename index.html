@@ -9,13 +9,15 @@
 </head>
 <body class="bg-slate-900 text-white p-4">
 
-<h1 class="text-2xl font-bold mb-4">Моделирование QPSK + LMS эквалайзера</h1>
+<h1 class="text-2xl font-bold mb-4">QPSK + LMS эквалайзер (полная модель)</h1>
 
 <label>SNR: <span id="snrVal">10</span> дБ</label>
 <input type="range" min="4" max="16" step="1" value="10" id="snrSlider" class="w-full">
 
-<div class="mt-4">BER: <span id="ber"></span></div>
+<div class="mt-2">BER: <span id="ber"></span></div>
 
+<div id="achh" style="height:350px"></div>
+<div id="berPlot" style="height:350px"></div>
 <div id="constBefore" style="height:300px"></div>
 <div id="constAfter" style="height:300px"></div>
 
@@ -25,9 +27,7 @@ function generateBits(N){return Array.from({length:N},()=>Math.random()>0.5?1:0)
 function qpskMod(bits){
  let s=[];
  for(let i=0;i<bits.length;i+=2){
-  let re=bits[i]? -1:1;
-  let im=bits[i+1]? -1:1;
-  s.push({re,im});
+  s.push({re:bits[i]? -1:1, im:bits[i+1]? -1:1});
  }
  return s;
 }
@@ -90,8 +90,50 @@ function demod(sig){
 
 function ber(a,b){
  let e=0;
- for(let i=0;i<a.length;i++) if(a[i]!=b[i]) e++;
- return e/a.length;
+ for(let i=0;i<b.length;i++) if(a[i]!=b[i]) e++;
+ return e/b.length;
+}
+
+function fftMag(signal){
+ let N=128;
+ let mag=[];
+ for(let k=0;k<N;k++){
+  let re=0,im=0;
+  for(let n=0;n<N && n<signal.length;n++){
+   let angle=-2*Math.PI*k*n/N;
+   re+=signal[n].re*Math.cos(angle);
+   im+=signal[n].re*Math.sin(angle);
+  }
+  mag.push(20*Math.log10(Math.sqrt(re*re+im*im)+1e-6));
+ }
+ return mag;
+}
+
+function plotACHH(before,after){
+ let x=Array.from({length:before.length},(_,i)=>i);
+ Plotly.newPlot('achh',[
+  {x,y:before,name:'До эквалайзера'},
+  {x,y:after,name:'После эквалайзера'}
+ ],{title:'АЧХ канала (до/после)'});
+}
+
+function plotBERcurve(){
+ let snrArr=[],berArr=[];
+ for(let s=4;s<=16;s+=1){
+  let bits=generateBits(1000);
+  let tx=qpskMod(bits);
+  let ch=applyChannel(tx);
+  let noisy=addNoise(ch,s);
+  let eq=lms(noisy);
+  let rx=demod(eq);
+  let b=ber(bits,rx);
+  snrArr.push(s);
+  berArr.push(b);
+ }
+ Plotly.newPlot('berPlot',[{x:snrArr,y:berArr,mode:'lines+markers'}],{
+  title:'BER vs SNR',
+  yaxis:{type:'log'}
+ });
 }
 
 function plotConst(id,data,title){
@@ -99,18 +141,12 @@ function plotConst(id,data,title){
   x:data.map(s=>s.re),
   y:data.map(s=>s.im),
   mode:'markers'
- }],{
-  title:title,
-  paper_bgcolor:'#0f172a',
-  plot_bgcolor:'#0f172a',
-  xaxis:{title:'I'},
-  yaxis:{title:'Q'}
- });
+ }],{title:title});
 }
 
 function run(){
- let snr=parseFloat(document.getElementById('snrSlider').value);
- document.getElementById('snrVal').innerText=snr;
+ let snr=parseFloat(snrSlider.value);
+ snrVal.innerText=snr;
 
  let bits=generateBits(2000);
  let tx=qpskMod(bits);
@@ -119,10 +155,13 @@ function run(){
  let eq=lms(noisy);
 
  let rxBits=demod(eq);
- let b=ber(bits.slice(0,rxBits.length),rxBits);
+ let b=ber(bits,rxBits);
+ ber.innerText=b.toExponential(2);
 
- document.getElementById('ber').innerText=b.toExponential(2);
-
+ let achhBefore=fftMag(noisy);
+ let achhAfter=fftMag(eq);
+ plotACHH(achhBefore,achhAfter);
+ plotBERcurve();
  plotConst('constBefore',noisy,'До эквалайзера');
  plotConst('constAfter',eq,'После эквалайзера');
 }
