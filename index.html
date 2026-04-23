@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адаптивный эквалайзер | Реалистичное моделирование</title>
+    <title>Адаптивный эквалайзер | Правильные графики</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js" charset="utf-8"></script>
     <style>
@@ -25,7 +25,7 @@
         <div class="text-center mb-8">
             <div class="animate-gradient h-32 rounded-3xl flex flex-col items-center justify-center mb-6 shadow-xl">
                 <h1 class="text-3xl md:text-4xl font-black uppercase tracking-wider drop-shadow-lg">Адаптивный эквалайзер</h1>
-                <p class="text-slate-200 text-sm mt-1">Реалистичная коррекция АЧХ | LMS алгоритм | QPSK модуляция</p>
+                <p class="text-slate-200 text-sm mt-1">Коррекция АЧХ радиоканала | LMS алгоритм | QPSK модуляция</p>
             </div>
         </div>
 
@@ -36,10 +36,10 @@
                     <div class="flex-1">
                         <div class="flex justify-between mb-2">
                             <label class="text-sm font-medium text-slate-300">Отношение сигнал/шум (SNR):</label>
-                            <span class="text-blue-400 font-bold font-mono text-xl" id="snrValue">9</span>
+                            <span class="text-blue-400 font-bold font-mono text-xl" id="snrValue">12</span>
                             <span class="text-slate-400">дБ</span>
                         </div>
-                        <input type="range" id="snrSlider" min="4" max="16" step="0.5" value="9" 
+                        <input type="range" id="snrSlider" min="4" max="16" step="0.5" value="12" 
                                class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
                         <div class="flex justify-between text-xs text-slate-500 mt-2">
                             <span>4 дБ</span>
@@ -57,6 +57,7 @@
                 </div>
             </div>
 
+            <!-- График 1: АЧХ -->
             <div class="mb-8">
                 <div class="flex items-center gap-2 mb-3">
                     <div class="w-2 h-6 bg-blue-500 rounded-full"></div>
@@ -65,22 +66,14 @@
                 <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
                     <div id="plotFrequency" style="height: 450px;"></div>
                     <div class="grid grid-cols-3 gap-4 mt-3 text-center text-sm">
-                        <div class="bg-slate-800/50 rounded-lg p-2">
-                            <span class="text-blue-400">🔵 Синяя</span> — Истинная АЧХ канала
-                        </div>
-                        <div class="bg-slate-800/50 rounded-lg p-2">
-                            <span class="text-green-400">🟢 Зеленая</span> — После эквалайзера <span class="text-yellow-300">(реалистично)</span>
-                        </div>
-                        <div class="bg-slate-800/50 rounded-lg p-2">
-                            <span class="text-red-400">🔴 Красная пунктир</span> — Идеал (0 дБ)
-                        </div>
+                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-blue-400">🔵 Синяя</span> — Истинная АЧХ канала</div>
+                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-green-400">🟢 Зеленая</span> — После эквалайзера</div>
+                        <div class="bg-slate-800/50 rounded-lg p-2"><span class="text-red-400">🔴 Красная пунктир</span> — Идеал (0 дБ)</div>
                     </div>
-                    <p class="text-xs text-slate-400 text-center mt-3" id="eqNote">
-                        💡 Чем выше SNR, тем точнее эквалайзер выравнивает АЧХ
-                    </p>
                 </div>
             </div>
 
+            <!-- График 2: BER vs SNR (С ПРАВИЛЬНЫМИ ОСЯМИ) -->
             <div class="mb-8">
                 <div class="flex items-center gap-2 mb-3">
                     <div class="w-2 h-6 bg-purple-500 rounded-full"></div>
@@ -88,9 +81,19 @@
                 </div>
                 <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
                     <div id="plotBer" style="height: 400px;"></div>
+                    <div class="grid grid-cols-3 gap-2 mt-3 text-xs text-center">
+                        <div class="bg-slate-800/30 rounded p-1"><span class="text-red-400">Красный пунктир</span> — предел SNR = 6 дБ</div>
+                        <div class="bg-slate-800/30 rounded p-1"><span class="text-green-400">Зеленый пунктир</span> — порог BER = 10⁻³</div>
+                        <div class="bg-slate-800/30 rounded p-1"><span class="text-yellow-400">⭐ Желтая точка</span> — текущий режим</div>
+                    </div>
+                    <p class="text-xs text-slate-400 text-center mt-2">
+                        📌 <strong>Ось X (горизонтальная):</strong> SNR (дБ) &nbsp;&nbsp;|&nbsp;&nbsp;
+                        <strong>Ось Y (вертикальная):</strong> BER (логарифмическая шкала)
+                    </p>
                 </div>
             </div>
 
+            <!-- Блок-схема -->
             <div class="mb-6">
                 <div class="flex items-center gap-2 mb-3">
                     <div class="w-2 h-6 bg-emerald-500 rounded-full"></div>
@@ -143,11 +146,11 @@
                 <div class="flex items-start gap-3">
                     <div class="text-2xl">🎯</div>
                     <div>
-                        <h3 class="font-bold text-blue-300">Реалистичное моделирование</h3>
+                        <h3 class="font-bold text-blue-300">Анализ результатов</h3>
                         <p class="text-sm text-slate-300 mt-1">
-                            ✅ <strong>Зеленая линия</strong> показывает результат работы эквалайзера <strong class="text-yellow-300">с учетом шума</strong>.
-                            При <strong>высоком SNR (13-16 дБ)</strong> зеленая линия близка к идеалу.
-                            При <strong>низком SNR (6 дБ)</strong> видны остаточные искажения — эквалайзер не может идеально выровнять АЧХ из-за шума.
+                            📌 <strong>При SNR = 6 дБ (предел):</strong> BER ≈ 1×10⁻³ — эквалайзер еще работает.<br>
+                            📌 <strong>При SNR = 12 дБ:</strong> BER ≈ 1.6×10⁻⁸ — ошибок практически нет.<br>
+                            📌 <strong>Зеленая линия на АЧХ</strong> показывает остаточные искажения после эквалайзера (не идеальна, что реалистично).
                         </p>
                     </div>
                 </div>
@@ -161,7 +164,7 @@
 
     <script>
         // ============================================================
-        // РЕАЛИСТИЧНОЕ МОДЕЛИРОВАНИЕ — с учетом шума при оценке АЧХ
+        // ПРАВИЛЬНЫЕ ГРАФИКИ — оси X и Y не перепутаны
         // ============================================================
 
         function calculateBER(snrDB) {
@@ -171,7 +174,6 @@
             return Math.min(0.5, Math.max(1e-8, q));
         }
 
-        // Истинная АЧХ канала (без шума)
         function getTrueChannelResponse() {
             const points = 500;
             const freqs = [];
@@ -180,36 +182,31 @@
                 const f = i / points;
                 freqs.push(f);
                 let db = 0;
-                db += 5.0 * Math.exp(-Math.pow((f - 0.22) / 0.1, 2));   // горб 1
-                db += 4.5 * Math.exp(-Math.pow((f - 0.68) / 0.09, 2));  // горб 2
-                db -= 6.0 * Math.exp(-Math.pow((f - 0.48) / 0.08, 2));   // провал
+                db += 5.0 * Math.exp(-Math.pow((f - 0.22) / 0.1, 2));
+                db += 4.5 * Math.exp(-Math.pow((f - 0.68) / 0.09, 2));
+                db -= 6.0 * Math.exp(-Math.pow((f - 0.48) / 0.08, 2));
                 db += 1.0 * (f - 0.5);
                 magDB.push(db);
             }
             return { freqs, magDB };
         }
 
-        // Измеренная АЧХ (с шумом, зависит от SNR)
         function getMeasuredChannelResponse(snrDB) {
             const { freqs, magDB } = getTrueChannelResponse();
-            // Шум в измерении АЧХ (тем больше, чем ниже SNR)
-            const noiseStd = 1.5 * Math.exp(-snrDB / 8);  // Эмпирическая зависимость
+            const noiseStd = 1.8 * Math.exp(-snrDB / 8);
             const noisyMag = magDB.map(v => v + (Math.random() - 0.5) * noiseStd * 2);
             return { freqs, magDB: noisyMag, trueMag: magDB };
         }
 
-        // LMS эквалайзер, обучающийся на зашумленной АЧХ
         function applyLmsEqualizer(measuredChannel, snrDB) {
             const n = measuredChannel.length;
             const filterOrder = 35;
             let weights = new Array(filterOrder).fill(0);
             weights[Math.floor(filterOrder/2)] = 1;
             
-            // Шаг адаптации зависит от SNR
             const mu = 0.002 * Math.min(1.0, Math.max(0.15, snrDB / 10));
-            
             const target = 0;
-            const epochs = Math.min(100, Math.floor(30 + snrDB * 2)); // Больше эпох при высоком SNR
+            const epochs = Math.min(100, Math.floor(30 + snrDB * 2));
             
             for (let epoch = 0; epoch < epochs; epoch++) {
                 for (let i = filterOrder; i < n; i++) {
@@ -217,21 +214,17 @@
                     for (let j = 0; j < filterOrder; j++) {
                         x.push(measuredChannel[i - j]);
                     }
-                    
                     let y = 0;
                     for (let j = 0; j < filterOrder; j++) {
                         y += weights[j] * x[j];
                     }
-                    
                     let error = target - y;
-                    
                     for (let j = 0; j < filterOrder; j++) {
                         weights[j] += mu * error * x[j];
                     }
                 }
             }
             
-            // Применяем эквалайзер к ИСТИННОЙ АЧХ (показывает реальную эффективность)
             const { magDB: trueChannel } = getTrueChannelResponse();
             const equalized = new Array(n);
             for (let i = 0; i < n; i++) {
@@ -247,16 +240,12 @@
                 equalized[i] = y;
             }
             
-            // Ограничиваем для красивого отображения
             for (let i = 0; i < n; i++) {
                 equalized[i] = Math.min(5, Math.max(-5, equalized[i]));
             }
             
             return equalized;
         }
-
-        let lastFreqs = null;
-        let lastTrueMag = null;
 
         function runSimulation() {
             const snr = parseFloat(document.getElementById('snrSlider').value);
@@ -270,11 +259,8 @@
             else if (ber < 0.01) berSpan.className = "text-2xl font-mono font-bold text-yellow-400";
             else berSpan.className = "text-2xl font-mono font-bold text-red-400";
             
-            // Получаем измеренную (зашумленную) АЧХ и обучаем эквалайзер
             const { freqs, trueMag } = getTrueChannelResponse();
             const { magDB: measuredMag } = getMeasuredChannelResponse(snr);
-            
-            // Обучаем эквалайзер на зашумленных данных, применяем к истинным
             const equalizedMag = applyLmsEqualizer(measuredMag, snr);
             
             // ГРАФИК АЧХ
@@ -304,17 +290,6 @@
                 line: { color: '#ef4444', width: 2, dash: 'dot' }
             };
             
-            // Добавляем зашумленную АЧХ для наглядности (полупрозрачная)
-            const traceMeasured = {
-                x: freqs,
-                y: measuredMag,
-                mode: 'lines',
-                name: '📉 Измеренная АЧХ (с шумом)',
-                line: { color: '#f59e0b', width: 1.5, dash: 'dot' },
-                opacity: 0.5,
-                visible: 'legendonly'  // скрыта по умолчанию, но можно включить
-            };
-            
             const layoutFreq = {
                 title: { text: 'Коррекция амплитудно-частотной характеристики радиоканала', font: { color: '#f1f5f9', size: 16 }, x: 0.05, xanchor: 'left' },
                 xaxis: { title: 'Нормированная частота (×π рад/с)', color: '#94a3b8', gridcolor: '#334155', range: [0, 1], dtick: 0.2 },
@@ -325,9 +300,9 @@
                 margin: { l: 60, r: 30, t: 60, b: 40 }
             };
             
-            Plotly.newPlot('plotFrequency', [traceTrue, traceEqualized, traceIdeal, traceMeasured], layoutFreq, { responsive: true });
+            Plotly.newPlot('plotFrequency', [traceTrue, traceEqualized, traceIdeal], layoutFreq, { responsive: true });
             
-            // ГРАФИК BER
+            // ГРАФИК BER vs SNR — ПРАВИЛЬНЫЕ ОСИ
             const snrRange = [];
             const berRange = [];
             for (let s = 3; s <= 17; s += 0.25) {
@@ -336,8 +311,8 @@
             }
             
             const berTrace = {
-                x: snrRange,
-                y: berRange,
+                x: snrRange,  // X = SNR (дБ)
+                y: berRange,  // Y = BER
                 mode: 'lines',
                 name: 'BER (QPSK модуляция)',
                 line: { color: '#a855f7', width: 3 },
@@ -345,19 +320,21 @@
                 fillcolor: 'rgba(168,85,247,0.1)'
             };
             
+            // Вертикальная линия на 6 дБ (предел SNR)
             const threshold6 = {
                 x: [6, 6],
                 y: [1e-8, 0.5],
                 mode: 'lines',
-                name: '⚠️ Предел 6 дБ',
+                name: '⚠️ Предел SNR = 6 дБ',
                 line: { color: '#ef4444', width: 2.5, dash: 'dash' }
             };
             
+            // Горизонтальная линия на BER = 10⁻³
             const thresholdBer = {
                 x: [3, 17],
                 y: [0.001, 0.001],
                 mode: 'lines',
-                name: '🎯 BER = 10⁻³',
+                name: '🎯 Порог BER = 10⁻³',
                 line: { color: '#10b981', width: 2, dash: 'dash' }
             };
             
@@ -365,18 +342,46 @@
                 x: [snr],
                 y: [ber],
                 mode: 'markers',
-                name: `⭐ SNR = ${snr.toFixed(1)} дБ, BER = ${ber.toExponential(2)}`,
+                name: `⭐ Текущий режим: SNR = ${snr.toFixed(1)} дБ, BER = ${ber.toExponential(2)}`,
                 marker: { color: '#fbbf24', size: 12, symbol: 'circle', line: { color: '#fff', width: 2 } }
             };
             
             const layoutBer = {
-                title: { text: 'Зависимость вероятности ошибки на бит (BER) от SNR', font: { color: '#f1f5f9', size: 16 }, x: 0.05, xanchor: 'left' },
-                xaxis: { title: 'SNR (дБ)', color: '#94a3b8', gridcolor: '#334155', range: [3, 17] },
-                yaxis: { title: 'BER', color: '#94a3b8', gridcolor: '#334155', type: 'log', range: [-7, 0], tickformat: '.0e' },
+                title: { 
+                    text: 'Зависимость вероятности ошибки на бит (BER) от отношения сигнал/шум (SNR)', 
+                    font: { color: '#f1f5f9', size: 16 }, 
+                    x: 0.05, 
+                    xanchor: 'left' 
+                },
+                xaxis: { 
+                    title: 'SNR (дБ)',                           // ← ПРАВИЛЬНО: X — это SNR
+                    color: '#94a3b8', 
+                    gridcolor: '#334155', 
+                    range: [3, 17],
+                    dtick: 2
+                },
+                yaxis: { 
+                    title: 'Вероятность ошибки на бит (BER)',    // ← ПРАВИЛЬНО: Y — это BER
+                    color: '#94a3b8', 
+                    gridcolor: '#334155', 
+                    type: 'log', 
+                    range: [-7, 0], 
+                    tickformat: '.0e',
+                    dtick: 1
+                },
                 plot_bgcolor: '#0f172a',
                 paper_bgcolor: 'rgba(0,0,0,0)',
-                legend: { font: { color: '#cbd5e1', size: 11 }, bgcolor: 'rgba(15,23,42,0.8)', bordercolor: '#334155', borderwidth: 1, x: 0.02, y: 0.98, xanchor: 'left', yanchor: 'top' },
-                margin: { l: 60, r: 30, t: 60, b: 40 }
+                legend: { 
+                    font: { color: '#cbd5e1', size: 11 }, 
+                    bgcolor: 'rgba(15,23,42,0.8)', 
+                    bordercolor: '#334155', 
+                    borderwidth: 1, 
+                    x: 0.02, 
+                    y: 0.98, 
+                    xanchor: 'left', 
+                    yanchor: 'top' 
+                },
+                margin: { l: 70, r: 30, t: 70, b: 50 }
             };
             
             Plotly.newPlot('plotBer', [berTrace, threshold6, thresholdBer, currentPoint], layoutBer, { responsive: true });
