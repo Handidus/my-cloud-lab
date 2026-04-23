@@ -2,51 +2,51 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Исправленный Эквалайзер LMS</title>
+    <title>Стабильный Эквалайзер — Финальная версия</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-4">
 
 <div class="max-w-5xl mx-auto bg-slate-800 p-6 rounded-xl shadow-2xl">
-    <h1 class="text-xl font-bold mb-4 text-blue-400">Стабильная модель: SNR 6-13 дБ</h1>
+    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center">Лабораторная работа: Адаптивное выравнивание (LMS)</h1>
     
-    <div class="flex gap-10 mb-6 items-center bg-slate-700 p-4 rounded-lg">
-        <div class="w-1/2">
-            <label>Отношение сигнал/шум: <span id="snrVal" class="text-yellow-400 font-bold">12</span> дБ</label>
+    <div class="flex flex-wrap gap-6 mb-6 items-center justify-center bg-slate-700 p-4 rounded-lg">
+        <div class="w-64">
+            <label class="text-sm">Сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400 font-bold">12</span> дБ</label>
             <input type="range" min="6" max="16" step="1" value="12" id="snrSlider" class="w-full mt-2">
         </div>
-        <div class="text-center">
-            <p class="text-sm">Текущий BER:</p>
+        <div class="text-center min-w-[150px]">
+            <p class="text-xs uppercase text-slate-400 tracking-wider">BER (Ошибка):</p>
             <p id="berDisplay" class="text-3xl font-mono text-green-400">0.00000</p>
         </div>
     </div>
 
     <div id="achhPlot" class="w-full bg-white rounded-lg mb-6" style="height:400px"></div>
-    <div class="grid grid-cols-2 gap-4">
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div id="constBefore" class="bg-white rounded-lg" style="height:350px"></div>
         <div id="constAfter" class="bg-white rounded-lg" style="height:350px"></div>
     </div>
 </div>
 
 <script>
-const TAPS = 31; // Увеличили для лучшего выравнивания
-const MU = 0.02; // Оптимальный шаг
+// Константы для стабильности
+const TAPS = 41; // Длинный фильтр для высокой точности
+const MU = 0.005; // Маленький шаг для плавной и точной настройки
 
 function run() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
 
-    // 1. Генерация QPSK
-    let symbols = [];
+    // 1. Генерация данных QPSK
     let orig = [];
-    for(let i=0; i<3000; i++) {
-        let s = {re: Math.random()>0.5?1:-1, im: Math.random()>0.5?1:-1};
-        orig.push(s);
+    for(let i=0; i<5000; i++) {
+        orig.push({re: Math.random()>0.5?1:-1, im: Math.random()>0.5?1:-1});
     }
 
-    // 2. Канал (тот самый сложный канал с завалом)
-    const h = [0.3, 0.7, 1.0, 0.7, 0.3, -0.1, -0.2];
+    // 2. Модель канала (ISI + Завал)
+    const h = [0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2]; // Плавный, но сильный фильтр
     let rx = [];
     for(let i=0; i<orig.length; i++) {
         let re=0, im=0;
@@ -56,7 +56,12 @@ function run() {
         rx.push({re, im});
     }
 
-    // 3. Шум
+    // 3. Нормировка мощности перед эквалайзером (Важно!)
+    const power = rx.reduce((a, b) => a + b.re*b.re + b.im*b.im, 0) / rx.length;
+    const norm = Math.sqrt(2 / power);
+    rx = rx.map(s => ({re: s.re*norm, im: s.im*norm}));
+
+    // 4. Добавление шума
     const snrLin = Math.pow(10, snr/10);
     const sigma = Math.sqrt(1 / (2 * snrLin));
     rx = rx.map(s => ({
@@ -64,9 +69,9 @@ function run() {
         im: s.im + sigma * (Math.random()*2-1)*1.7
     }));
 
-    // 4. LMS Эквалайзер (Адаптация)
+    // 5. Адаптивный эквалайзер LMS
     let w = new Array(TAPS).fill(0);
-    w[Math.floor(TAPS/2)] = 1;
+    w[Math.floor(TAPS/2)] = 1; // Импульс в центре
     let eqOut = [];
     
     for(let i=TAPS; i<rx.length; i++) {
@@ -76,9 +81,9 @@ function run() {
             yIm += w[j] * rx[i-j].im;
         }
 
-        // Обучение (Decision Directed + Training)
-        let dRe = i < 1000 ? orig[i].re : (yRe > 0 ? 1 : -1);
-        let dIm = i < 1000 ? orig[i].im : (yIm > 0 ? 1 : -1);
+        // Обучение: первые 2000 символов - чистая тренировка, затем решение
+        let dRe = (i < 2000) ? orig[i].re : (yRe > 0 ? 1 : -1);
+        let dIm = (i < 2000) ? orig[i].im : (yIm > 0 ? 1 : -1);
 
         let eRe = dRe - yRe;
         let eIm = dIm - yIm;
@@ -89,9 +94,9 @@ function run() {
         eqOut.push({re: yRe, im: yIm});
     }
 
-    // 5. BER (после сходимости)
+    // 6. Расчет BER (только на стабильном участке)
     let errors = 0;
-    let startIdx = 1200;
+    let startIdx = 2500;
     let testData = eqOut.slice(startIdx);
     testData.forEach((s, i) => {
         if((s.re>0?1:-1) !== orig[i+startIdx+TAPS].re) errors++;
@@ -99,33 +104,38 @@ function run() {
     });
     document.getElementById('berDisplay').innerText = (errors/(testData.length*2)).toFixed(5);
 
-    // 6. Графики АЧХ
-    const getFFT = (coeffs) => {
+    // 7. Графики АЧХ
+    const getFFT = (coeffs, n=128) => {
         let res = [];
-        for(let k=0; k<64; k++) {
+        for(let k=0; k<n/2; k++) {
             let re=0, im=0;
-            for(let n=0; n<coeffs.length; n++) {
-                let a = -2*Math.PI*k*n/128;
-                re += coeffs[n]*Math.cos(a);
-                im += coeffs[n]*Math.sin(a);
+            for(let j=0; j<coeffs.length; j++) {
+                let a = -2*Math.PI*k*j/n;
+                re += coeffs[j]*Math.cos(a);
+                im += coeffs[j]*Math.sin(a);
             }
             res.push(20 * Math.log10(Math.sqrt(re*re+im*im)+1e-6));
         }
         return res;
     };
 
-    const hF = getFFT(h);
+    const hF = getFFT(h.map(v => v*norm)); // С учетом нормировки
     const wF = getFFT(w);
     const totalF = hF.map((v, i) => v + wF[i]);
 
     Plotly.newPlot('achhPlot', [
-        {y: hF, name: 'Канал', line: {color: 'red'}},
-        {y: wF, name: 'Эквалайзер', line: {color: 'blue'}},
-        {y: totalF, name: 'Итоговая АЧХ', line: {color: 'green', width: 4}}
-    ], {title: 'Анализ АЧХ (Результат должен быть плоским)', margin: {t:30}});
+        {y: hF, name: 'Канал (ИСИ)', line: {color: '#f87171'}},
+        {y: wF, name: 'Фильтр Эквалайзера', line: {color: '#60a5fa'}},
+        {y: totalF, name: 'Результат (Выровненная АЧХ)', line: {color: '#4ade80', width: 4}}
+    ], {
+        title: 'Частотный анализ (dB / f)',
+        xaxis: {title: 'Частота'},
+        yaxis: {title: 'Амплитуда (дБ)', range: [-25, 10]},
+        margin: {t:40, b:40}
+    });
 
-    Plotly.newPlot('constBefore', [{x: rx.map(s=>s.re), y: rx.map(s=>s.im), mode:'markers', marker:{size:2, color:'gray'}}], {title:'До'});
-    Plotly.newPlot('constAfter', [{x: eqOut.slice(1200).map(s=>s.re), y: eqOut.slice(1200).map(s=>s.im), mode:'markers', marker:{size:2, color:'blue'}}], {title:'После'});
+    Plotly.newPlot('constBefore', [{x: rx.slice(2500).map(s=>s.re), y: rx.slice(2500).map(s=>s.im), mode:'markers', marker:{size:2, color:'#94a3b8'}}], {title:'Вход эквалайзера (Шум)', margin:{t:30}});
+    Plotly.newPlot('constAfter', [{x: eqOut.slice(2500).map(s=>s.re), y: eqOut.slice(2500).map(s=>s.im), mode:'markers', marker:{size:2, color:'#3b82f6'}}], {title:'Выход (Чистое созвездие)', margin:{t:30}});
 }
 
 document.getElementById('snrSlider').oninput = run;
