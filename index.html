@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <title>OFDM СИМУЛЯТОР: АРХИТЕКТУРА</title>
+    <meta charset="UTF-8">
+    <title>OFDM СИМУЛЯТОР</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
@@ -21,7 +22,7 @@
         </div>
     </div>
 
-    <div id="plotMain" class="bg-white rounded h-80 mb-4"></div>
+    <div id="plotMain" class="bg-white rounded h-80 mb-4 text-black"></div>
     
     <table class="w-full text-sm text-left border-collapse bg-slate-800">
         <thead class="text-slate-400"><tr class="border-b border-slate-700"><th class="p-3">Шум</th><th class="p-3">Сигнал (дБ)</th><th class="p-3">Эффективность</th></tr></thead>
@@ -30,56 +31,56 @@
 </div>
 
 <script>
-function runEngine() {
-    const snr = parseFloat(document.getElementById('snrSlider').value);
-    document.getElementById('snrVal').innerText = snr;
+window.onload = function() {
+    function runEngine() {
+        const snr = parseFloat(document.getElementById('snrSlider').value);
+        document.getElementById('snrVal').innerText = snr;
 
-    const N = 64; 
-    const bits = Array.from({length: N}, () => Math.random() > 0.5 ? 1 : -1);
+        const N = 64; 
+        const bits = Array.from({length: N}, () => Math.random() > 0.5 ? 1 : -1);
 
-    // --- [1] БЛОК OFDM: БАЗИСНЫЕ ФУНКЦИИ (ОРТОГОНАЛЬНОСТЬ) ---
-    // Это генерация поднесущих, которые не мешают друг другу
-    const subCarrier = (i, N) => Math.sin(2 * Math.PI * i / N); 
+        // [1] OFDM: Генерация ортогональных поднесущих
+        const subCarrier = (i, N) => Math.sin(2 * Math.PI * i / N); 
+        const ofdmSymbol = bits.map((b, i) => b * subCarrier(i, N));
 
-    // --- [2] БЛОК OFDM: МУЛЬТИПЛЕКСИРОВАНИЕ ---
-    // Формируем OFDM-символ путем наложения данных на ортогональный базис
-    const ofdmSymbol = bits.map((b, i) => b * subCarrier(i, N));
+        // [2] КАНАЛ: Частотная селективность (АЧХ)
+        const noiseLevel = Math.pow(10, -snr/20);
+        const channelOutput = ofdmSymbol.map((val, i) => {
+            const h = Math.sin(Math.PI * i / N);
+            return (val * h) + (Math.random() - 0.5) * noiseLevel;
+        });
 
-    // --- [3] БЛОК КАНАЛА: ЧАСТОТНАЯ СЕЛЕКТИВНОСТЬ ---
-    const noiseLevel = Math.pow(10, -snr/20);
-    const channelOutput = ofdmSymbol.map((val, i) => {
-        const h = Math.sin(Math.PI * i / N); // Искажения канала
-        return (val * h) + (Math.random() - 0.5) * noiseLevel;
-    });
+        // [3] LMS: Эквалайзер (Восстановление сигнала)
+        const corrected = channelOutput.map((r, i) => {
+            const h_est = Math.sin(Math.PI * i / N);
+            return r / (h_est + 0.1); 
+        });
 
-    // --- [4] БЛОК OFDM: LMS-ЭКВАЛАЙЗЕР ---
-    // Восстановление ортогональности через инверсию характеристик канала
-    const corrected = channelOutput.map((r, i) => {
-        const h_est = Math.sin(Math.PI * i / N); // Оценка канала приемником
-        return r / (h_est + 0.1); 
-    });
+        const ber = bits.filter((b, i) => (corrected[i] > 0 ? 1 : -1) !== b).length / N;
+        document.getElementById('berVal').innerText = ber.toFixed(4);
 
-    const ber = bits.filter((b, i) => (corrected[i] > 0 ? 1 : -1) !== b).length / N;
-    document.getElementById('berVal').innerText = ber.toFixed(4);
+        // Отрисовка
+        const trace1 = {y: ofdmSymbol, name: 'OFDM Передача'};
+        const trace2 = {y: corrected, name: 'LMS Прием'};
+        
+        Plotly.newPlot('plotMain', [trace1, trace2], {
+            title: 'OFDM: Исходный vs Принятый (LMS)',
+            xaxis: {title: 'Индекс отсчета времени'},
+            yaxis: {title: 'Амплитуда'},
+            margin: {t:40, b:40}
+        });
 
-    Plotly.newPlot('plotMain', [
-        {y: ofdmSymbol, name: 'OFDM Сигнал (Передача)'}, 
-        {y: corrected, name: 'Восстановленный сигнал (LMS)'}
-    ], {title: 'OFDM: Исходный сигнал vs Прием (LMS)', margin: {t:40, b:40}}, {staticPlot: true});
+        // Таблица
+        const tableData = [{n: ">90%", r: "0-6", e: "0%"}, {n: "60-80%", r: "6-10", e: "70%"}, {n: "5-15%", r: "12-13", e: "95-100%"}];
+        document.getElementById('tableBody').innerHTML = tableData.map(row => `
+            <tr class="${(snr >= parseFloat(row.r.split('-')[0]) && snr <= 13) ? 'bg-blue-900' : ''}">
+                <td class="p-3">${row.n}</td><td class="p-3">${row.r} дБ</td><td class="p-3">${row.e}</td>
+            </tr>`).join('');
+    }
 
-    updateTable(snr);
-}
-
-function updateTable(snr) {
-    const tableData = [{n: ">90%", r: "0-6", e: "0%"}, {n: "60-80%", r: "6-10", e: "70%"}, {n: "5-15%", r: "12-13", e: "95-100%"}];
-    document.getElementById('tableBody').innerHTML = tableData.map(row => `
-        <tr class="${(snr >= parseFloat(row.r.split('-')[0]) && snr <= 13) ? 'bg-blue-900' : ''}">
-            <td class="p-3">${row.n}</td><td class="p-3">${row.r} дБ</td><td class="p-3">${row.e}</td>
-        </tr>`).join('');
-}
-
-document.getElementById('snrSlider').oninput = runEngine;
-runEngine();
+    document.getElementById('snrSlider').oninput = runEngine;
+    runEngine();
+};
 </script>
 </body>
 </html>
