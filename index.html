@@ -2,37 +2,32 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Анализ системы связи (LMS/OFDM)</title>
+    <title>Анализ демодуляции и ортогональности</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-4">
 
-<div class="max-w-5xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
-    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center uppercase">Анализ АЧХ и эффективности выравнивания</h1>
+<div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
+    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center uppercase">Анализ системы: LMS/OFDM</h1>
     
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-700 p-4 rounded-lg mb-6 border border-slate-600">
-        <div>
-            <label class="text-xs font-bold text-slate-400 uppercase tracking-tighter">Уровень сигнала (SNR): <span id="snrVal" class="text-yellow-400 text-lg">12</span> дБ</label>
-            <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-2 mt-2 bg-slate-600 rounded-lg cursor-pointer accent-blue-500">
-        </div>
-        <div class="flex flex-col justify-center items-end">
-            <span class="text-[10px] text-slate-400 uppercase">Вероятность ошибки (BER):</span>
-            <span id="berDisplay" class="text-3xl font-mono font-bold">0.00000</span>
-        </div>
+    <div class="bg-slate-700 p-4 rounded-lg mb-6 border border-slate-600">
+        <label class="font-bold">Отношение сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
+        <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-2 mt-2 accent-blue-500 cursor-pointer">
     </div>
 
-    <div id="achhPlot" class="bg-slate-50 rounded-lg mb-6" style="height:300px"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div id="achhPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
+        <div id="orthoPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
+    </div>
+
+    <div id="bitStreamPlot" class="w-full bg-slate-50 rounded-lg mb-6" style="height:250px"></div>
 
     <div class="bg-slate-700 p-4 rounded-lg border border-slate-600">
-        <h2 class="text-blue-300 font-bold mb-2 uppercase text-sm">Таблица соответствия параметров</h2>
-        <table class="w-full text-xs text-left border-collapse">
-            <thead>
-                <tr class="text-slate-400 border-b border-slate-600">
-                    <th class="p-2">Уровень шума</th>
-                    <th class="p-2">Сигнал (дБ)</th>
-                    <th class="p-2">Эффективность</th>
-                </tr>
+        <h2 class="text-blue-400 font-bold mb-2 uppercase text-sm">Таблица анализа (Вопрос 7)</h2>
+        <table class="w-full text-xs text-left">
+            <thead class="text-slate-400 border-b border-slate-600">
+                <tr><th class="p-2">Уровень шума (%)</th><th class="p-2">Уровень сигнала (дБ)</th><th class="p-2">Эффективность (%)</th></tr>
             </thead>
             <tbody id="statTable"></tbody>
         </table>
@@ -44,68 +39,50 @@ function run() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
     
-    // Логика расчета BER (вероятности ошибки)
-    let ber;
-    if (snr < 6) ber = 0.45;
-    else if (snr <= 12) ber = 0.05 * (13 - snr);
-    else ber = 0.35;
+    // Логика расчета BER
+    const ber = (snr < 6) ? 0.49 : (snr > 13) ? 0.35 : (10 - snr) * 0.05;
     
-    document.getElementById('berDisplay').innerText = ber.toFixed(5);
-
-    // Обновление графиков
-    updateGraphs(snr);
-    // Обновление таблицы
+    updateGraphs(snr, ber);
     updateTable(snr);
 }
 
-function updateGraphs(snr) {
-    const freq = Array.from({length: 64}, (_, i) => i);
-    // Моделируем шум: чем дальше SNR от 12-13, тем выше искажения
-    const noise = Math.abs(12.5 - snr) * 0.5;
-    const achh = freq.map(f => -Math.pow(f-32, 2)/100 - 2 + (Math.random()-0.5) * noise);
-    
-    Plotly.newPlot('achhPlot', [{
-        y: achh, 
-        name: 'АЧХ канала', 
-        line: {color: '#22c55e', width: 3}
-    }], { 
-        title: 'Разброс АЧХ (Адаптация LMS)', 
-        margin: {t:40, b:30}, 
-        paper_bgcolor: '#f8fafc', 
-        yaxis: {range: [-15, 5]} 
-    });
+function updateGraphs(snr, ber) {
+    const samples = 64;
+    const t = Array.from({length: samples}, (_, i) => i);
+
+    // 1. АЧХ
+    const channel = t.map(f => -Math.pow(f-32, 2)/80 - 5);
+    const result = t.map(f => -2 + (Math.random()-0.5) * (13-snr)*0.5);
+    Plotly.newPlot('achhPlot', [
+        {y: channel, name: 'АЧХ Канала', line: {color: 'red'}},
+        {y: result, name: 'Итог (LMS)', line: {color: 'green', width: 3}}
+    ], { title: 'АЧХ: Амплитуда(дБ) / Частота', margin: {t:40, b:40}, xaxis: {title: 'Частотные поднесущие'}, yaxis: {title: 'Амплитуда (дБ)', range: [-25, 5]} });
+
+    // 2. ОРТОГОНАЛЬНОСТЬ
+    const wave1 = t.map(x => Math.cos(2 * Math.PI * 1 * x / samples));
+    const wave2 = t.map(x => Math.cos(2 * Math.PI * 2 * x / samples));
+    Plotly.newPlot('orthoPlot', [
+        {y: wave1, name: 'Поднесущая f1'}, {y: wave2, name: 'Поднесущая f2'}
+    ], { title: 'Ортогональные функции', margin: {t:40, b:40}, xaxis: {title: 'Время'}, yaxis: {title: 'Амплитуда'} });
+
+    // 3. БИТЫ
+    const bits = t.map(x => (Math.sin(x * 0.2) > 0 ? 1 : 0));
+    Plotly.newPlot('bitStreamPlot', [{y: bits, name: 'Сигнал', line: {shape: 'hv'}}], { title: 'Демодулированный сигнал', margin: {t:40, b:40}, xaxis: {title: 'Бит'}, yaxis: {title: 'Логический уровень'} });
 }
 
 function updateTable(snr) {
-    const tableBody = document.getElementById('statTable');
     const data = [
         {noise: ">90%", range: "Ниже 6", eff: "0% (Плохо)"},
-        {noise: "60-80%", range: "6-8", eff: "70% (Лучше)"},
-        {noise: "40-60%", range: "8-10", eff: "75% (Ещё лучше)"},
-        {noise: "20-40%", range: "10-12", eff: "85% (Ещё лучше)"},
-        {noise: "5-15%", range: "12-13", eff: "95-100% (Отлично)"},
-        {noise: ">95%", range: "Выше 13", eff: "1% (Плохо)"},
-        {noise: ">99%", range: "Выше 14", eff: "0% (Очень плохо)"}
+        {noise: "60-80%", range: "6-8", eff: "70%"},
+        {noise: "40-60%", range: "8-10", eff: "75%"},
+        {noise: "20-40%", range: "10-12", eff: "85%"},
+        {noise: "5-15%", range: "12-13", eff: "95-100%"},
+        {noise: ">95%", range: "Выше 13", eff: "1% (Плохо)"}
     ];
-
-    tableBody.innerHTML = data.map((item, index) => {
-        let active = false;
-        if (snr < 6 && index === 0) active = true;
-        else if (snr >= 6 && snr < 8 && index === 1) active = true;
-        else if (snr >= 8 && snr < 10 && index === 2) active = true;
-        else if (snr >= 10 && snr < 12 && index === 3) active = true;
-        else if (snr >= 12 && snr <= 13 && index === 4) active = true;
-        else if (snr > 13 && snr <= 14 && index === 5) active = true;
-        else if (snr > 14 && index === 6) active = true;
-
-        return `
-            <tr class="${active ? 'bg-blue-600 text-white' : 'text-slate-300'} border-b border-slate-700">
-                <td class="p-2">${item.noise}</td>
-                <td class="p-2 font-mono">${item.range} дБ</td>
-                <td class="p-2">${item.eff}</td>
-            </tr>
-        `;
-    }).join('');
+    document.getElementById('statTable').innerHTML = data.map((item, i) => `
+        <tr class="${(snr >= parseFloat(item.range) && snr <= parseFloat(item.range)+1) ? 'bg-blue-600' : ''}">
+            <td class="p-2">${item.noise}</td><td class="p-2">${item.range} дБ</td><td class="p-2">${item.eff}</td>
+        </tr>`).join('');
 }
 
 document.getElementById('snrSlider').oninput = run;
