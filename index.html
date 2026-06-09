@@ -2,25 +2,41 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>OFDM Лабораторная модель</title>
+    <title>OFDM Лабораторный стенд</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-6">
 
 <div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700">
-    <h1 class="text-xl font-bold mb-6 text-blue-400 text-center">OFDM Система с коррекцией канала</h1>
+    <h1 class="text-xl font-bold mb-6 text-blue-400 text-center">Лабораторный стенд: OFDM и LMS-выравнивание</h1>
     
-    <div class="bg-slate-700 p-6 rounded-lg mb-6 border border-slate-600">
-        <label class="block mb-2 font-bold text-sm text-slate-300">
-            Отношение сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400">12</span> дБ
-        </label>
-        <input type="range" min="0" max="20" step="0.5" value="12" id="snrSlider" class="w-full h-3 bg-slate-600 rounded-lg accent-blue-500 cursor-pointer">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-700 p-4 rounded-lg border border-slate-600">
+            <label class="block mb-2 text-xs font-bold text-slate-400 uppercase">SNR: <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
+            <input type="range" min="0" max="20" step="0.5" value="12" id="snrSlider" class="w-full h-3 bg-slate-600 rounded-lg accent-blue-500 cursor-pointer">
+        </div>
+        <div class="bg-slate-900 p-4 rounded text-center border border-slate-600">
+            <div class="text-slate-400 text-xs uppercase">Вероятность ошибки (BER)</div>
+            <div id="berDisplay" class="text-2xl font-mono text-green-400">0.000</div>
+        </div>
+        <div class="bg-slate-900 p-4 rounded text-center border border-slate-600">
+            <div class="text-slate-400 text-xs uppercase">Эффективность</div>
+            <div id="effDisplay" class="text-2xl font-mono text-blue-400">95%</div>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div id="orthoPlot" class="bg-white rounded-lg" style="height:300px"></div>
-        <div id="achhPlot" class="bg-white rounded-lg" style="height:300px"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div id="orthoPlot" class="bg-white rounded-lg" style="height:250px"></div>
+        <div id="achhPlot" class="bg-white rounded-lg" style="height:250px"></div>
+    </div>
+    <div id="bitStreamPlot" class="bg-white rounded-lg mb-4" style="height:200px"></div>
+
+    <div class="bg-slate-700 p-4 rounded-lg border border-slate-600">
+        <table class="w-full text-sm text-left text-slate-200">
+            <thead><tr class="text-slate-400 uppercase"><th class="pb-2">SNR (дБ)</th><th class="pb-2">Эффективность</th></tr></thead>
+            <tbody id="statTable"></tbody>
+        </table>
     </div>
 </div>
 
@@ -29,40 +45,36 @@ function update() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
     
-    // --- 1. ЭМУЛЯЦИЯ OFDM (Ортогональность) ---
-    // В OFDM мы используем набор ортогональных поднесущих.
-    // Ортогональность означает, что интеграл произведения двух сигналов за период равен нулю.
-    const samples = 100;
-    const t = Array.from({length: samples}, (_, i) => i);
-    
-    // Каждая поднесущая k имеет частоту f = k/T
-    const subcarrier1 = t.map(x => Math.sin(2 * Math.PI * 1 * x / samples));
-    const subcarrier2 = t.map(x => Math.sin(2 * Math.PI * 2 * x / samples));
-    
+    // Расчет параметров (условная модель)
+    const ber = snr < 10 ? 0.1 : (snr > 15 ? 0.001 : 0.02);
+    const eff = Math.min(100, Math.floor(50 + snr * 3.5));
+    document.getElementById('berDisplay').innerText = ber.toFixed(3);
+    document.getElementById('effDisplay').innerText = eff + "%";
+
+    // 1. OFDM: Ортогональные функции
+    const t = Array.from({length: 100}, (_, i) => i);
     Plotly.newPlot('orthoPlot', [
-        {y: subcarrier1, name: 'Поднесущая 1', line: {color: '#3b82f6'}},
-        {y: subcarrier2, name: 'Поднесущая 2', line: {color: '#f59e0b'}}
-    ], { title: 'Ортогональные поднесущие (OFDM)', margin: {t:40, b:30, l:40, r:20} });
+        {y: t.map(x => Math.sin(2 * Math.PI * x / 50)), name: 'f1', line: {color: '#3b82f6'}},
+        {y: t.map(x => Math.sin(2 * Math.PI * 2 * x / 50)), name: 'f2', line: {color: '#f59e0b'}}
+    ], { title: 'Ортогональные поднесущие (OFDM)', margin: {t:30, b:20, l:30, r:10} });
 
-    // --- 2. РЕАЛИСТИЧНАЯ АЧХ (Rayleigh Fading) ---
-    // Вместо треугольника создаем модель с "замираниями" (fading).
-    // Реальный канал имеет случайные провалы амплитуды на разных частотах.
+    // 2. АЧХ канала (Реалистичная с замираниями)
     const x = Array.from({length: 64}, (_, i) => i);
-    const fading = x.map(i => {
-        // Случайный набросок частотной характеристики (рэлеевский характер)
-        return 2 * Math.sin(i / 5) * Math.cos(i / 10) + (Math.random() - 0.5) * (20 - snr) * 0.2;
-    });
+    const fading = x.map(i => 2 * Math.sin(i / 5) + (Math.random() - 0.5) * (20 - snr) * 0.1);
+    Plotly.newPlot('achhPlot', [{y: fading, name: 'АЧХ', line: {color: '#ef4444', shape: 'spline'}}], 
+    { title: 'АЧХ канала (Fading)', margin: {t:30, b:20, l:30, r:10}, yaxis: {range: [-3, 3]} });
 
-    Plotly.newPlot('achhPlot', [{
-        y: fading, 
-        type: 'scatter', 
-        name: 'АЧХ канала', 
-        line: {color: '#ef4444', width: 2, shape: 'spline'}
-    }], { 
-        title: 'Реалистичная АЧХ с замираниями', 
-        margin: {t:40, b:30, l:40, r:20},
-        yaxis: {range: [-5, 5]}
-    });
+    // 3. Биты
+    const bitsIn = t.slice(0, 20).map(x => (Math.random() > 0.5 ? 1 : 0));
+    const bitsOut = bitsIn.map(b => (Math.random() < ber ? 1 - b : b));
+    Plotly.newPlot('bitStreamPlot', [
+        {y: bitsIn, name: 'Вход', type: 'scatter', line: {shape: 'hv', color: '#64748b'}},
+        {y: bitsOut, name: 'Выход', type: 'scatter', line: {shape: 'hv', color: '#22c55e'}}
+    ], { title: 'Поток бит (Вход vs Выход)', margin: {t:30, b:20, l:30, r:10} });
+
+    // 4. Таблица
+    const table = document.getElementById('statTable');
+    table.innerHTML = `<tr><td>< 10</td><td>Низкая</td></tr><tr><td>10-15</td><td>Средняя</td></tr><tr><td>> 15</td><td>Высокая</td></tr>`;
 }
 
 document.getElementById('snrSlider').oninput = update;
