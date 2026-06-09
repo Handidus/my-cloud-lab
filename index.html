@@ -2,112 +2,116 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Демодуляция и Ортогональность (LMS/OFDM)</title>
+    <title>OFDM Лабораторный стенд</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
-<body class="bg-slate-900 text-white p-4">
+<body class="bg-slate-900 text-white p-6">
 
 <div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
-    <h1 class="text-xl font-bold mb-4 text-blue-400 text-center uppercase">Анализ демодуляции и ортогональных функций</h1>
+    <h1 class="text-xl font-bold mb-6 text-blue-400 text-center uppercase">Лабораторный стенд: Анализ OFDM и LMS</h1>
     
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-700 p-4 rounded-lg mb-6 border border-slate-600">
-        <div>
-            <label class="text-xs font-bold text-slate-400 uppercase tracking-tighter">Отношение сигнал/шум (SNR): <span id="snrVal" class="text-yellow-400 text-lg">12</span> дБ</label>
-            <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-2 mt-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-700 p-4 rounded-lg">
+            <label class="text-xs font-bold uppercase text-slate-400">SNR: <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
+            <input type="range" min="4" max="16" step="0.1" value="12" id="snrSlider" class="w-full h-3 accent-blue-500 cursor-pointer">
         </div>
-        <div class="flex flex-col justify-center items-end">
-            <span class="text-[10px] text-slate-400 uppercase">Вероятность ошибки (BER):</span>
-            <span id="berDisplay" class="text-3xl font-mono font-bold">0.00000</span>
+        <div class="bg-slate-900 p-4 rounded text-center border border-slate-600">
+            <div class="text-slate-400 text-xs uppercase">Вероятность ошибки (BER)</div>
+            <div id="berDisplay" class="text-2xl font-mono text-green-400">0.000</div>
+        </div>
+        <div class="bg-slate-900 p-4 rounded text-center border border-slate-600">
+            <div class="text-slate-400 text-xs uppercase">Эффективность</div>
+            <div id="effDisplay" class="text-2xl font-mono text-blue-400">95%</div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div id="achhPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
-        <div id="orthoPlot" class="bg-slate-50 rounded-lg" style="height:300px"></div>
+        <div id="orthoPlot" class="bg-white rounded p-2" style="height:250px"></div>
+        <div id="achhPlot" class="bg-white rounded p-2" style="height:250px"></div>
     </div>
 
-    <div id="bitStreamPlot" class="w-full bg-slate-50 rounded-lg mb-6" style="height:250px"></div>
+    <div id="bitStreamPlot" class="bg-white rounded p-2 mb-4" style="height:200px"></div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div id="constPlot" class="bg-slate-50 rounded-lg" style="height:250px"></div>
-        <div class="bg-slate-700 p-6 rounded-lg border border-slate-600 flex flex-col justify-center">
-            <h2 class="text-blue-400 font-bold mb-2 uppercase text-sm">Параметры системы:</h2>
-            <ul class="text-xs space-y-2 text-slate-300">
-                <li><b class="text-white">Канал:</b> Частотно-селективный (Rayleigh/Rice model)</li>
-                <li><b class="text-white">Метод разделения:</b> Ортогональное частотное уплотнение (OFDM)</li>
-                <li><b class="text-white">Алгоритм:</b> Адаптивная коррекция LMS</li>
-                <li><b class="text-white">Демодуляция:</b> Сравнение переданных и принятых бит (Hard Decision)</li>
-            </ul>
-        </div>
+    <div class="bg-slate-700 p-4 rounded-lg border border-slate-600">
+        <h2 class="text-blue-400 font-bold mb-3 uppercase text-sm">Таблица соответствия эффективности</h2>
+        <table class="w-full text-sm text-left text-slate-200">
+            <thead class="text-slate-400 border-b border-slate-600">
+                <tr><th class="py-2">Уровень сигнала (дБ)</th><th class="py-2">Эффективность выравнивания</th></tr>
+            </thead>
+            <tbody id="statTable"></tbody>
+        </table>
     </div>
 </div>
 
 <script>
-function run() {
+function update() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
     
-    let ber, jitter;
-    // Логика окна 6-13 дБ
-    if (snr < 6) { ber = 0.49; jitter = 5; }
-    else if (snr <= 13) { 
-        ber = (snr > 10) ? 0 : (10 - snr) * 0.05;
-        jitter = 0.1 + (13 - snr) * 0.4;
-    } else { ber = 0.35; jitter = 3.5; }
+    // Логика расчета BER и эффективности
+    let ber, eff;
+    if (snr < 6) { ber = 0.49; eff = 0; }
+    else if (snr >= 6 && snr <= 13) { ber = (13 - snr) * 0.01; eff = 70 + (snr - 6) * 4; }
+    else if (snr > 13 && snr <= 14) { ber = 0.35; eff = 1; }
+    else { ber = 0.45; eff = 0; }
 
-    const disp = document.getElementById('berDisplay');
-    disp.innerText = ber.toFixed(5);
-    disp.style.color = ber === 0 ? "#4ade80" : "#f87171";
+    document.getElementById('berDisplay').innerText = ber.toFixed(3);
+    document.getElementById('effDisplay').innerText = eff.toFixed(0) + "%";
 
-    updateGraphs(snr, ber, jitter);
-}
-
-function updateGraphs(snr, ber, jitter) {
-    const samples = 50;
-    const t = Array.from({length: samples}, (_, i) => i);
-
-    // 1. ОРТОГОНАЛЬНЫЕ ФУНКЦИИ (Демонстрация OFDM)
-    // Показываем две поднесущие, которые "не мешают" друг другу
-    const wave1 = t.map(x => Math.cos(2 * Math.PI * 1 * x / samples));
-    const wave2 = t.map(x => Math.cos(2 * Math.PI * 2 * x / samples));
-    
+    // 1. OFDM Ортогональность
+    const t = Array.from({length: 100}, (_, i) => i);
     Plotly.newPlot('orthoPlot', [
-        {y: wave1, name: 'Поднесущая f1', line: {color: '#3b82f6'}},
-        {y: wave2, name: 'Поднесущая f2', line: {color: '#f59e0b'}}
-    ], { title: 'Ортогональные базисные функции', margin: {t:40, b:30, l:30, r:20}, paper_bgcolor: '#f8fafc' });
+        {y: t.map(x => Math.sin(2 * Math.PI * x / 50)), name: 'f1', line: {color: '#3b82f6'}},
+        {y: t.map(x => Math.sin(2 * Math.PI * 2 * x / 50)), name: 'f2', line: {color: '#f59e0b'}}
+    ], { 
+        title: 'Ортогональные функции (OFDM)',
+        xaxis: {title: 'Время (отсчеты)'},
+        yaxis: {title: 'Амплитуда'},
+        margin: {t:40, b:40, l:40, r:20} 
+    });
 
-    // 2. ДЕМОДУЛИРОВАННЫЙ СИГНАЛ
-    const inputBits = t.map(x => (Math.sin(x * 0.5) > 0 ? 1 : 0));
-    const outputBits = inputBits.map(b => (Math.random() < ber ? (1 - b) : b));
+    // 2. АЧХ
+    const x = Array.from({length: 64}, (_, i) => i);
+    const fading = x.map(i => 2 * Math.sin(i / 5) + (Math.random() - 0.5) * (14 - snr) * 0.2);
+    Plotly.newPlot('achhPlot', [{y: fading, name: 'АЧХ', line: {color: '#ef4444', shape: 'spline'}}], 
+    { 
+        title: 'АЧХ Канала (Замирания)',
+        xaxis: {title: 'Частота'},
+        yaxis: {title: 'Амплитуда (дБ)'},
+        margin: {t:40, b:40, l:40, r:20} 
+    });
 
+    // 3. Биты
     Plotly.newPlot('bitStreamPlot', [
-        {y: inputBits, name: 'Входные биты', type: 'scatter', mode: 'lines+markers', line: {shape: 'hv', color: '#94a3b8'}},
-        {y: outputBits, name: 'Выход демодулятора', type: 'scatter', mode: 'lines+markers', line: {shape: 'hv', color: '#22c55e'}}
-    ], { title: 'Сравнение входного и демодулированного сигнала', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc' });
+        {y: [0, 1, 1, 0, 1, 0, 0, 1, 1], name: 'Вход', line: {shape: 'hv', color: '#64748b'}},
+        {y: [0, 1, 0, 0, 1, 1, 0, 1, 0], name: 'Выход', line: {shape: 'hv', color: '#22c55e'}}
+    ], { 
+        title: 'Поток бит (Вход vs Выход)',
+        xaxis: {title: 'Битовый интервал'},
+        yaxis: {title: 'Уровень'},
+        margin: {t:40, b:40, l:40, r:20} 
+    });
 
-    // 3. АЧХ
-    const freq = Array.from({length: 64}, (_, i) => i);
-    const channel = freq.map(f => -Math.pow(f-32, 2)/80 - 5);
-    const result = freq.map(f => 0 + (Math.random()-0.5) * jitter);
-    Plotly.newPlot('achhPlot', [
-        {y: channel, name: 'АЧХ Канала', line: {color: '#f87171'}},
-        {y: result, name: 'Итог (LMS)', line: {color: '#22c55e', width: 3}}
-    ], { title: 'Амплитудно-частотная характеристика', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc', yaxis: {range: [-25, 10]} });
-
-    // 4. Созвездие
-    let rx = [];
-    const pts = [[1,1], [1,-1], [-1,1], [-1,-1]];
-    for(let i=0; i<250; i++) {
-        let p = pts[Math.floor(Math.random()*4)];
-        let s = ber > 0 ? 1.3 : 0.18;
-        rx.push({x: p[0]+(Math.random()-0.5)*s, y: p[1]+(Math.random()-0.5)*s});
-    }
-    Plotly.newPlot('constPlot', [{x: rx.map(p=>p.x), y: rx.map(p=>p.y), mode: 'markers', marker: {size:4, color:'#3b82f6'}}], { title: 'Выходное созвездие', margin: {t:40, b:30}, paper_bgcolor: '#f8fafc' });
+    // 4. Таблица
+    const ranges = [
+        { label: "Ниже 6 дБ", eff: "0% - плохо" },
+        { label: "6-8 дБ", eff: "70% - лучше" },
+        { label: "8-10 дБ", eff: "75% - ещё лучше" },
+        { label: "10-12 дБ", eff: "85% - ещё лучше" },
+        { label: "12-13 дБ", eff: "95-100%" },
+        { label: "Выше 13 дБ", eff: "1% - плохо" },
+        { label: "Выше 14 дБ", eff: "0% - очень плохо" }
+    ];
+    document.getElementById('statTable').innerHTML = ranges.map((r, i) => `
+        <tr class="${(i === Math.floor(snr/3) || (snr > 13 && i >= 5)) ? 'bg-blue-900' : ''}">
+            <td class="py-2 border-b border-slate-600">${r.label}</td>
+            <td class="py-2 border-b border-slate-600">${r.eff}</td>
+        </tr>`).join('');
 }
 
-document.getElementById('snrSlider').oninput = run;
-run();
+document.getElementById('snrSlider').oninput = update;
+update();
 </script>
 </body>
 </html>
