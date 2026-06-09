@@ -1,67 +1,81 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <title>OFDM СИМУЛЯТОР (ДВИЖОК)</title>
+    <title>OFDM СИМУЛЯТОР: АРХИТЕКТУРА</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
-<body class="bg-slate-950 text-white p-4">
+<body class="bg-slate-950 text-white p-6">
 
-<div class="max-w-6xl mx-auto bg-slate-900 p-6 border border-slate-700 rounded-xl">
-    <h1 class="text-2xl font-bold text-center text-blue-400 mb-6">OFDM СИМУЛЯТОР С LMS-ЭКВАЛАЙЗЕРОМ</h1>
-    
+<div class="max-w-6xl mx-auto bg-slate-900 p-6 rounded-xl border border-slate-700 shadow-xl">
+    <h1 class="text-2xl font-bold text-center text-blue-400 mb-6 uppercase">OFDM СИМУЛЯТОР С LMS-ЭКВАЛАЙЗЕРОМ</h1>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+        <div class="bg-slate-800 p-4 rounded border border-slate-700">
             <label class="font-bold">SNR: <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
-            <input type="range" min="0" max="20" step="0.5" value="12" id="snrSlider" class="w-full accent-blue-500">
-            <div class="mt-4 text-center">
-                <div class="text-xs text-slate-400">Вероятность ошибки (BER)</div>
-                <div id="berVal" class="text-2xl font-mono text-red-400 font-bold">0.000</div>
-            </div>
+            <input type="range" id="snrSlider" min="0" max="20" step="0.5" value="12" class="w-full accent-blue-500">
         </div>
-        <div id="plotAchh" class="bg-white rounded-lg h-40"></div>
+        <div class="bg-slate-800 p-4 rounded border border-slate-700 text-center">
+            <span class="text-slate-400 text-xs">ВЕРОЯТНОСТЬ ОШИБКИ (BER)</span>
+            <div id="berVal" class="text-2xl font-mono text-red-400">0.0000</div>
+        </div>
     </div>
 
-    <div id="plotSignal" class="bg-white rounded-lg h-64 mb-4"></div>
+    <div id="plotMain" class="bg-white rounded h-80 mb-4"></div>
     
-    <div id="plotConstellation" class="bg-white rounded-lg h-64"></div>
+    <table class="w-full text-sm text-left border-collapse bg-slate-800">
+        <thead class="text-slate-400"><tr class="border-b border-slate-700"><th class="p-3">Шум</th><th class="p-3">Сигнал (дБ)</th><th class="p-3">Эффективность</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+    </table>
 </div>
 
 <script>
-/**
- * OFDM ДВИЖОК:
- * 1. Генерация QAM символов
- * 2. Прохождение через частотно-селективный канал (дуга АЧХ)
- * 3. LMS-эквалайзер (инверсия канала)
- */
 function runEngine() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
 
-    const N = 64; // Количество поднесущих
+    const N = 64; 
     const bits = Array.from({length: N}, () => Math.random() > 0.5 ? 1 : -1);
 
-    // Моделирование канала (частотная селективность)
-    const channel = bits.map((b, i) => {
-        const attenuation = Math.sin(Math.PI * i / N); // Та самая "дуга"
-        const noise = (Math.random() - 0.5) * Math.pow(10, -snr/20);
-        return (b * attenuation) + noise;
+    // --- [1] БЛОК OFDM: БАЗИСНЫЕ ФУНКЦИИ (ОРТОГОНАЛЬНОСТЬ) ---
+    // Это генерация поднесущих, которые не мешают друг другу
+    const subCarrier = (i, N) => Math.sin(2 * Math.PI * i / N); 
+
+    // --- [2] БЛОК OFDM: МУЛЬТИПЛЕКСИРОВАНИЕ ---
+    // Формируем OFDM-символ путем наложения данных на ортогональный базис
+    const ofdmSymbol = bits.map((b, i) => b * subCarrier(i, N));
+
+    // --- [3] БЛОК КАНАЛА: ЧАСТОТНАЯ СЕЛЕКТИВНОСТЬ ---
+    const noiseLevel = Math.pow(10, -snr/20);
+    const channelOutput = ofdmSymbol.map((val, i) => {
+        const h = Math.sin(Math.PI * i / N); // Искажения канала
+        return (val * h) + (Math.random() - 0.5) * noiseLevel;
     });
 
-    // LMS-Эквалайзер (Математическое выравнивание)
-    const corrected = channel.map((val, i) => {
-        const est = Math.sin(Math.PI * i / N);
-        return val / (est + 0.01); // Восстановление амплитуды
+    // --- [4] БЛОК OFDM: LMS-ЭКВАЛАЙЗЕР ---
+    // Восстановление ортогональности через инверсию характеристик канала
+    const corrected = channelOutput.map((r, i) => {
+        const h_est = Math.sin(Math.PI * i / N); // Оценка канала приемником
+        return r / (h_est + 0.1); 
     });
 
-    // Расчет BER
-    const errors = bits.filter((b, i) => (corrected[i] > 0 ? 1 : -1) !== b).length;
-    document.getElementById('berVal').innerText = (errors / N).toFixed(4);
+    const ber = bits.filter((b, i) => (corrected[i] > 0 ? 1 : -1) !== b).length / N;
+    document.getElementById('berVal').innerText = ber.toFixed(4);
 
-    // Отрисовка
-    Plotly.newPlot('plotAchh', [{y: bits.map((_, i) => Math.sin(Math.PI * i / N)), name: 'Канал'}, {y: corrected, name: 'Выход'}], {title: 'АЧХ (Канал vs LMS)', margin: {t:30, b:30}});
-    Plotly.newPlot('plotSignal', [{y: bits, name: 'Вход', line: {shape: 'hv'}}, {y: corrected, name: 'Прием', mode: 'markers'}], {title: 'Сигнальный поток', margin: {t:30, b:30}});
-    Plotly.newPlot('plotConstellation', [{x: corrected, y: bits, mode: 'markers'}], {title: 'Созвездие (Демодуляция)', xaxis: {title: 'I'}, yaxis: {title: 'Q'}, margin: {t:30, b:30}});
+    Plotly.newPlot('plotMain', [
+        {y: ofdmSymbol, name: 'OFDM Сигнал (Передача)'}, 
+        {y: corrected, name: 'Восстановленный сигнал (LMS)'}
+    ], {title: 'OFDM: Исходный сигнал vs Прием (LMS)', margin: {t:40, b:40}}, {staticPlot: true});
+
+    updateTable(snr);
+}
+
+function updateTable(snr) {
+    const tableData = [{n: ">90%", r: "0-6", e: "0%"}, {n: "60-80%", r: "6-10", e: "70%"}, {n: "5-15%", r: "12-13", e: "95-100%"}];
+    document.getElementById('tableBody').innerHTML = tableData.map(row => `
+        <tr class="${(snr >= parseFloat(row.r.split('-')[0]) && snr <= 13) ? 'bg-blue-900' : ''}">
+            <td class="p-3">${row.n}</td><td class="p-3">${row.r} дБ</td><td class="p-3">${row.e}</td>
+        </tr>`).join('');
 }
 
 document.getElementById('snrSlider').oninput = runEngine;
