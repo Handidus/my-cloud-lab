@@ -5,14 +5,11 @@
     <title>Анализ системы LMS/OFDM</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
-    <style>
-        .plot-container { background: #f8fafc; border-radius: 8px; margin-bottom: 20px; }
-    </style>
 </head>
 <body class="bg-slate-900 text-white p-6">
 
 <div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
-    <h1 class="text-2xl font-bold mb-6 text-blue-400 text-center uppercase">Стенд анализа: АЧХ и Ортогональность</h1>
+    <h1 class="text-2xl font-bold mb-6 text-blue-400 text-center uppercase">Стенд анализа: LMS/OFDM</h1>
     
     <div class="bg-slate-700 p-6 rounded-lg mb-6 border border-slate-600">
         <label class="block mb-2 font-bold text-slate-200">Уровень сигнала (SNR): <span id="snrVal" class="text-yellow-400 text-lg">12</span> дБ</label>
@@ -20,68 +17,71 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div id="achhPlot" class="plot-container" style="height:350px"></div>
-        <div id="orthoPlot" class="plot-container" style="height:350px"></div>
+        <div id="achhPlot" style="background:#fff; border-radius:8px; height:350px"></div>
+        <div id="orthoPlot" style="background:#fff; border-radius:8px; height:350px"></div>
     </div>
-    <div id="bitStreamPlot" class="plot-container w-full" style="height:250px"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div id="bitStreamPlot" style="background:#fff; border-radius:8px; height:250px"></div>
+        <div id="berPlot" style="background:#fff; border-radius:8px; height:250px"></div>
+    </div>
 
     <div class="bg-slate-700 p-6 rounded-lg border border-slate-600">
         <h2 class="text-blue-300 font-bold mb-4 uppercase text-sm">Таблица анализа (Вопрос 7)</h2>
-        <table class="w-full text-sm text-left border-collapse">
+        <table class="w-full text-sm text-left border-collapse text-slate-200">
             <thead>
                 <tr class="text-slate-400 border-b border-slate-600">
-                    <th class="p-3">Шум</th><th class="p-3">Сигнал (дБ)</th><th class="p-3">Выравнивание АЧХ</th>
+                    <th class="p-3">Шум</th><th class="p-3">Сигнал (дБ)</th><th class="p-3">Эффективность</th>
                 </tr>
             </thead>
-            <tbody id="statTable" class="text-slate-200"></tbody>
+            <tbody id="statTable"></tbody>
         </table>
     </div>
 </div>
 
 <script>
+/**
+ * Основная функция запуска обновления графиков при движении ползунка
+ */
 function run() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
     document.getElementById('snrVal').innerText = snr;
-    
     updateGraphs(snr);
     updateTable(snr);
 }
 
 function updateGraphs(snr) {
-    const t = Array.from({length: 64}, (_, i) => i);
+    const samples = 64;
+    const t = Array.from({length: samples}, (_, i) => i);
 
-    // 1. АЧХ
+    // 1. АЧХ КАНАЛА (Частотная селективность)
+    // Формируем "дугу" затухания канала с помощью параболической функции
     const channel = t.map(f => -Math.pow(f-32, 2)/80 - 5);
+    // Итог LMS - это попытка инверсии "дуги" канала
     const result = t.map(f => -2 + (Math.random()-0.5) * (13-snr)*0.3);
+    
     Plotly.newPlot('achhPlot', [
         {y: channel, name: 'АЧХ Канала', line: {color: 'red'}},
         {y: result, name: 'Итог (LMS)', line: {color: 'green', width: 3}}
-    ], { 
-        title: 'АЧХ канала',
-        margin: {t:40, b:40, l:50, r:20},
-        xaxis: {title: 'Частотные поднесущие'},
-        yaxis: {title: 'Амплитуда (дБ)', range: [-25, 5]} 
-    });
+    ], { title: 'АЧХ: Амплитуда (дБ) / Частота', xaxis: {title: 'Индекс частоты'}, yaxis: {title: 'Амплитуда (дБ)'}, margin: {t:40, b:40} });
 
-    // 2. ОРТОГОНАЛЬНОСТЬ
-    const wave1 = t.map(x => Math.cos(2 * Math.PI * 1 * x / 64));
-    const wave2 = t.map(x => Math.cos(2 * Math.PI * 2 * x / 64));
+    // 2. ОРТОГОНАЛЬНОСТЬ (Логика OFDM)
+    // Поднесущие f1 и f2 кратны друг другу, что гарантирует ортогональность: интеграл произведения равен 0
+    const f1 = t.map(x => Math.cos(2 * Math.PI * 1 * x / samples));
+    const f2 = t.map(x => Math.cos(2 * Math.PI * 2 * x / samples));
+    
     Plotly.newPlot('orthoPlot', [
-        {y: wave1, name: 'f1'}, {y: wave2, name: 'f2'}
-    ], { 
-        title: 'Ортогональные функции',
-        margin: {t:40, b:40, l:50, r:20},
-        xaxis: {title: 'Время (отсчеты)'},
-        yaxis: {title: 'Амплитуда сигнала'} 
+        {y: f1, name: 'f1'}, {y: f2, name: 'f2'}
+    ], { title: 'Ортогональные функции', xaxis: {title: 'Отсчеты времени'}, yaxis: {title: 'Амплитуда'}, margin: {t:40, b:40} });
+
+    // 3. БИТОВЫЙ ПОТОК (Демодуляция)
+    const bits = t.map(x => (Math.sin(x*0.2) > 0 ? 1 : 0));
+    Plotly.newPlot('bitStreamPlot', [{y: bits, line: {shape: 'hv', color: '#2563eb'}}], { 
+        title: 'Демодулированный сигнал', xaxis: {title: 'Индекс бита'}, yaxis: {title: 'Логический уровень'}, margin: {t:40, b:40} 
     });
 
-    // 3. БИТЫ
-    const bits = t.map(x => (Math.sin(x * 0.2) > 0 ? 1 : 0));
-    Plotly.newPlot('bitStreamPlot', [{y: bits, line: {shape: 'hv', color: '#2563eb'}}], { 
-        title: 'Демодулированный сигнал',
-        margin: {t:40, b:40, l:50, r:20},
-        xaxis: {title: 'Номер бита'},
-        yaxis: {title: 'Логический уровень'} 
+    // 4. ГРАФИК BER (Вероятность ошибки)
+    Plotly.newPlot('berPlot', [{x:[0,13,50], y:[1, 0.001, 0.00001], name: 'BER'}], { 
+        title: 'Зависимость BER от SNR', xaxis: {title: 'Отношение SNR (дБ)'}, yaxis: {title: 'BER (лог.)'}, margin: {t:40, b:40} 
     });
 }
 
@@ -92,8 +92,7 @@ function updateTable(snr) {
         {noise: "40-60%", min: 8, max: 10, eff: "75% - еще лучше"},
         {noise: "20-40%", min: 10, max: 12, eff: "85% - еще лучше"},
         {noise: "5-15%", min: 12, max: 13, eff: "95-100%"},
-        {noise: ">95%", min: 13, max: 14, eff: "1% - плохо"},
-        {noise: ">99%", min: 14, max: 100, eff: "0% - очень плохо"}
+        {noise: ">95%", min: 13, max: 100, eff: "1% - плохо"}
     ];
     document.getElementById('statTable').innerHTML = data.map(item => `
         <tr class="${(snr >= item.min && snr < item.max) ? 'bg-blue-900' : ''}">
@@ -103,6 +102,7 @@ function updateTable(snr) {
         </tr>`).join('');
 }
 
+// Запуск при загрузке
 document.getElementById('snrSlider').oninput = run;
 run();
 </script>
