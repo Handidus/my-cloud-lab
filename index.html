@@ -10,7 +10,7 @@
 
 <div class="max-w-6xl mx-auto bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
     <h1 class="text-xl font-bold mb-6 text-blue-400 text-center uppercase">Лабораторный стенд: Анализ OFDM и LMS</h1>
-    
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="bg-slate-700 p-4 rounded-lg">
             <label class="text-xs font-bold uppercase text-slate-400">SNR: <span id="snrVal" class="text-yellow-400">12</span> дБ</label>
@@ -37,7 +37,7 @@
         <h2 class="text-blue-400 font-bold mb-3 uppercase text-sm">Таблица соответствия эффективности</h2>
         <table class="w-full text-sm text-left text-slate-200">
             <thead class="text-slate-400 border-b border-slate-600">
-                <tr><th class="py-2">Уровень сигнала (дБ)</th><th class="py-2">Эффективность выравнивания</th></tr>
+                <tr><th class="py-2">Диапазон SNR (дБ)</th><th class="py-2">BER (в середине диапазона)</th><th class="py-2">Эффективность выравнивания</th></tr>
             </thead>
             <tbody id="statTable"></tbody>
         </table>
@@ -45,16 +45,38 @@
 </div>
 
 <script>
+// --- Модель качества канала ---
+// Эффективное выравнивание (LMS) работает только в "рабочем окне" SNR 6–13 дБ:
+// ниже 6 дБ — слишком много шума, алгоритм не сходится;
+// выше 13 дБ — в этой лабораторной модели тоже считается нештатным режимом (плохо).
+// Внутри окна 6–13 дБ — эффективность высокая, вне его — низкая. Переходы гладкие (без скачков),
+// но за пределами окна показатели быстро и последовательно ухудшаются.
+const WINDOW_LOW = 6;
+const WINDOW_HIGH = 13;
+const EDGE_SHARPNESS = 2.5; // чем больше, тем резче граница окна
+
+function computeEff(snr) {
+    const rise = 1 / (1 + Math.exp(-EDGE_SHARPNESS * (snr - WINDOW_LOW)));
+    const fall = 1 / (1 + Math.exp(EDGE_SHARPNESS * (snr - WINDOW_HIGH)));
+    return 100 * rise * fall;
+}
+function computeBer(snr) {
+    // BER — зеркало эффективности: внутри рабочего окна ошибок мало, вне его — много
+    return 0.5 * (1 - computeEff(snr) / 100);
+}
+
+const RANGES = [
+    { min: 4,  max: 6,  label: '< 6 дБ',    note: 'плохо' },
+    { min: 6,  max: 13, label: '6 – 13 дБ', note: 'эффективное выравнивание' },
+    { min: 13, max: 16, label: '> 13 дБ',   note: 'плохо' }
+];
+
 function update() {
     const snr = parseFloat(document.getElementById('snrSlider').value);
-    document.getElementById('snrVal').innerText = snr;
-    
-    // Логика расчета BER и эффективности
-    let ber, eff;
-    if (snr < 6) { ber = 0.49; eff = 0; }
-    else if (snr >= 6 && snr <= 13) { ber = (13 - snr) * 0.01; eff = 70 + (snr - 6) * 4; }
-    else if (snr > 13 && snr <= 14) { ber = 0.35; eff = 1; }
-    else { ber = 0.45; eff = 0; }
+    document.getElementById('snrVal').innerText = snr.toFixed(1);
+
+    const ber = computeBer(snr);
+    const eff = computeEff(snr);
 
     document.getElementById('berDisplay').innerText = ber.toFixed(3);
     document.getElementById('effDisplay').innerText = eff.toFixed(0) + "%";
@@ -62,52 +84,53 @@ function update() {
     // 1. OFDM Ортогональность
     const t = Array.from({length: 100}, (_, i) => i);
     Plotly.newPlot('orthoPlot', [
-        {y: t.map(x => Math.sin(2 * Math.PI * x / 50)), name: 'f1', line: {color: '#3b82f6'}},
-        {y: t.map(x => Math.sin(2 * Math.PI * 2 * x / 50)), name: 'f2', line: {color: '#f59e0b'}}
-    ], { 
-        title: 'Ортогональные функции (OFDM)',
-        xaxis: {title: 'Время (отсчеты)'},
-        yaxis: {title: 'Амплитуда'},
-        margin: {t:40, b:40, l:40, r:20} 
+        {y: t.map(x => Math.sin(2 * Math.PI * x / 50)), name: 'Поднесущая f1', line: {color: '#3b82f6'}},
+        {y: t.map(x => Math.sin(2 * Math.PI * 2 * x / 50)), name: 'Поднесущая f2 (2f1)', line: {color: '#f59e0b'}}
+    ], {
+        title: {text: 'Ортогональные поднесущие (OFDM)'},
+        xaxis: {title: {text: 'Время, номер отсчёта (t)'}},
+        yaxis: {title: {text: 'Амплитуда сигнала, у.е.'}},
+        margin: {t:40, b:40, l:60, r:20}
     });
 
-    // 2. АЧХ
+    // 2. АЧХ — уровень шума в модели тоже завязан на ту же (монотонную) зависимость от SNR
     const x = Array.from({length: 64}, (_, i) => i);
-    const fading = x.map(i => 2 * Math.sin(i / 5) + (Math.random() - 0.5) * (14 - snr) * 0.2);
-    Plotly.newPlot('achhPlot', [{y: fading, name: 'АЧХ', line: {color: '#ef4444', shape: 'spline'}}], 
-    { 
-        title: 'АЧХ Канала (Замирания)',
-        xaxis: {title: 'Частота'},
-        yaxis: {title: 'Амплитуда (дБ)'},
-        margin: {t:40, b:40, l:40, r:20} 
+    const noiseScale = 0.2 + (1 - eff / 100) * 1.6; // чем ниже эффективность, тем сильнее замирания
+    const fading = x.map(i => 2 * Math.sin(i / 5) + (Math.random() - 0.5) * noiseScale);
+    Plotly.newPlot('achhPlot', [{y: fading, name: 'АЧХ канала', line: {color: '#ef4444', shape: 'spline'}}],
+    {
+        title: {text: 'АЧХ канала (замирания)'},
+        xaxis: {title: {text: 'Индекс поднесущей (частота)'}},
+        yaxis: {title: {text: 'Амплитуда отклика, дБ'}},
+        margin: {t:40, b:40, l:60, r:20}
     });
 
-    // 3. Биты
+    // 3. Биты — количество ошибочных бит теперь реально зависит от BER
+    const inputBits = [0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0];
+    const outputBits = inputBits.map(b => (Math.random() < ber ? 1 - b : b));
     Plotly.newPlot('bitStreamPlot', [
-        {y: [0, 1, 1, 0, 1, 0, 0, 1, 1], name: 'Вход', line: {shape: 'hv', color: '#64748b'}},
-        {y: [0, 1, 0, 0, 1, 1, 0, 1, 0], name: 'Выход', line: {shape: 'hv', color: '#22c55e'}}
-    ], { 
-        title: 'Поток бит (Вход vs Выход)',
-        xaxis: {title: 'Битовый интервал'},
-        yaxis: {title: 'Уровень'},
-        margin: {t:40, b:40, l:40, r:20} 
+        {y: inputBits, name: 'Вход (переданные биты)', line: {shape: 'hv', color: '#64748b'}},
+        {y: outputBits, name: 'Выход (принятые биты)', line: {shape: 'hv', color: '#22c55e'}}
+    ], {
+        title: {text: 'Поток бит: вход vs выход после канала'},
+        xaxis: {title: {text: 'Номер бита в потоке'}},
+        yaxis: {title: {text: 'Логический уровень (0 / 1)'}, tickvals: [0, 1]},
+        margin: {t:40, b:40, l:60, r:20}
     });
 
-    // 4. Таблица
-    const ranges = [
-        { label: "Ниже 6 дБ", eff: "0% - плохо" },
-        { label: "6-8 дБ", eff: "70% - лучше" },
-        { label: "8-10 дБ", eff: "75% - ещё лучше" },
-        { label: "10-12 дБ", eff: "85% - ещё лучше" },
-        { label: "12-13 дБ", eff: "95-100%" },
-        { label: "Выше 13 дБ", eff: "1% - плохо" },
-        { label: "Выше 14 дБ", eff: "0% - очень плохо" }
-    ];
-    document.getElementById('statTable').innerHTML = ranges.map((r, i) => `
-        <tr class="${(i === Math.floor(snr/3) || (snr > 13 && i >= 5)) ? 'bg-blue-900' : ''}">
+    // 4. Таблица — считается по той же формуле, что и основные показатели, подсветка по фактическому диапазону
+    document.getElementById('statTable').innerHTML = RANGES.map(r => {
+        const mid = (r.min + r.max) / 2;
+        const rBer = computeBer(mid);
+        const rEff = computeEff(mid);
+        const active = snr >= r.min && snr < r.max || (r.max === 16 && snr === 16);
+        return `
+        <tr class="${active ? 'bg-blue-900' : ''}">
             <td class="py-2 border-b border-slate-600">${r.label}</td>
-            <td class="py-2 border-b border-slate-600">${r.eff}</td>
-        </tr>`).join('');
+            <td class="py-2 border-b border-slate-600">${rBer.toFixed(3)}</td>
+            <td class="py-2 border-b border-slate-600">${rEff.toFixed(0)}% — ${r.note}</td>
+        </tr>`;
+    }).join('');
 }
 
 document.getElementById('snrSlider').oninput = update;
